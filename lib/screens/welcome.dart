@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:devconnect/screens/login.dart';
+import 'package:devconnect/screens/register.dart';
+
 
 
 class Welcome extends StatelessWidget {
@@ -32,7 +34,10 @@ class Welcome extends StatelessWidget {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () {
-                    // TODO: naviger til registrering
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const Register()),
+                    );
                   },
                   child: const Text('Opprett bruker'),
                 ),

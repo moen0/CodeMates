@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class Login extends StatefulWidget {
   const Login({super.key});
@@ -10,6 +11,30 @@ class Login extends StatefulWidget {
 class _LoginScreenState extends State<Login> {
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
+  bool isLoading = false;
+
+  Future<void> signIn() async {
+    setState(() { isLoading = true; });
+    try {
+      await Supabase.instance.client.auth.signInWithPassword(
+        email: emailController.text.trim(),
+        password: passwordController.text,
+      );
+      if (mounted) {
+        // TODO: naviger til hovedskjerm
+        print('Innlogget!');
+      }
+    } on AuthException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() { isLoading = false; });
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -27,6 +52,7 @@ class _LoginScreenState extends State<Login> {
                   labelText: 'E-post',
                   prefixIcon: Icon(Icons.email),
                 ),
+                keyboardType: TextInputType.emailAddress,
               ),
               const SizedBox(height: 16),
               TextField(
@@ -41,10 +67,10 @@ class _LoginScreenState extends State<Login> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () {
-                    // TODO: koble til Supabase auth
-                  },
-                  child: const Text('Logg inn'),
+                  onPressed: isLoading ? null : signIn,
+                  child: isLoading
+                      ? const CircularProgressIndicator()
+                      : const Text('Logg inn'),
                 ),
               ),
             ],
