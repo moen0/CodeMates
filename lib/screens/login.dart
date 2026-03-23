@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'home_screen.dart';
 
 class Login extends StatefulWidget {
   const Login({super.key});
@@ -21,8 +22,10 @@ class _LoginScreenState extends State<Login> {
         password: passwordController.text,
       );
       if (mounted) {
-        // TODO: naviger til hovedskjerm
-        print('Innlogget!');
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+        );print('Innlogget!');
       }
     } on AuthException catch (e) {
       if (mounted) {
@@ -39,7 +42,7 @@ class _LoginScreenState extends State<Login> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Logg inn')),
+      appBar: AppBar(title: const Text('Log inn')),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 32),
