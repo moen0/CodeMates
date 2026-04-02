@@ -7,6 +7,7 @@ void main() async {
   await Supabase.initialize(
       url: 'https://albicrewixbvnkzuslpb.supabase.co',
       anonKey: 'sb_publishable_pFKNfr9QFqbXotSjE96YvQ_AkBPjKeP',
+
   );
       runApp(const MyApp());
 
@@ -14,6 +15,7 @@ void main() async {
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
+
 
   @override
   Widget build(BuildContext context) {
