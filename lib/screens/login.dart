@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'home_screen.dart';
+import 'package:devconnect/widgets/brutalist_ui.dart';
 
 class Login extends StatefulWidget {
   const Login({super.key});
@@ -15,7 +16,9 @@ class _LoginScreenState extends State<Login> {
   bool isLoading = false;
 
   Future<void> signIn() async {
-    setState(() { isLoading = true; });
+    setState(() {
+      isLoading = true;
+    });
     try {
       await Supabase.instance.client.auth.signInWithPassword(
         email: emailController.text.trim(),
@@ -25,54 +28,65 @@ class _LoginScreenState extends State<Login> {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const HomeScreen()),
-        );print('Innlogget!');
+        );
+        print('Innlogget!');
       }
     } on AuthException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
       }
     } finally {
-      if (mounted) setState(() { isLoading = false; });
+      if (mounted)
+        setState(() {
+          isLoading = false;
+        });
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Log inn')),
-      body: SafeArea(
+    return BrutalistScaffold(
+      appBar: const BrutalistHeader(title: 'Logg inn'),
+      child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 32),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              TextField(
-                controller: emailController,
-                decoration: const InputDecoration(
-                  labelText: 'E-post',
-                  prefixIcon: Icon(Icons.email),
+              BrutalistPanel(
+                child: TextField(
+                  controller: emailController,
+                  decoration: brutalistInputDecoration(
+                    labelText: 'E-post',
+                    hintText: 'epost@eksempel.no',
+                  ).copyWith(prefixIcon: const Icon(Icons.email)),
+                  keyboardType: TextInputType.emailAddress,
                 ),
-                keyboardType: TextInputType.emailAddress,
               ),
               const SizedBox(height: 16),
-              TextField(
-                controller: passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'Passord',
-                  prefixIcon: Icon(Icons.lock),
+              BrutalistPanel(
+                child: TextField(
+                  controller: passwordController,
+                  obscureText: true,
+                  decoration: brutalistInputDecoration(
+                    labelText: 'Passord',
+                  ).copyWith(prefixIcon: const Icon(Icons.lock)),
                 ),
               ),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
+                  style: brutalistPrimaryButtonStyle(),
                   onPressed: isLoading ? null : signIn,
                   child: isLoading
-                      ? const CircularProgressIndicator()
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
                       : const Text('Logg inn'),
                 ),
               ),
