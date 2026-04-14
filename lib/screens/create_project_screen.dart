@@ -1,6 +1,6 @@
+import 'create_project_step2_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 class CreateProjectScreen extends StatefulWidget {
   const CreateProjectScreen({super.key});
@@ -21,20 +21,16 @@ class _CreateProjectScreenState extends State<CreateProjectScreen>
   final descriptionController = TextEditingController();
   late final AnimationController _entryController;
 
-  int maxMembers = 4;
-  bool isLoading = false;
   String? selectedType;
   String? selectedGoal;
 
-  // hente skills fra db
-  List<Map<String, dynamic>> allSkills = [];
-  List<int> selectedSkillIds = [];
   final List<String> projectTypes = const [
     'Skoleprosjekt',
     'Sideprosjekt',
     'Startup',
     'Open Source',
   ];
+
   final List<_GoalOption> projectGoals = const [
     _GoalOption(
       id: 'mvp',
@@ -43,17 +39,17 @@ class _CreateProjectScreenState extends State<CreateProjectScreen>
     ),
     _GoalOption(
       id: 'portfolio',
-      label: 'Lage portefolje',
+      label: 'Lage porteføjle',
       icon: Icons.work_outline,
     ),
     _GoalOption(
       id: 'learn',
-      label: 'Laere ny teknologi',
+      label: 'Lære ny teknologi',
       icon: Icons.lightbulb_outline,
     ),
     _GoalOption(
       id: 'solve',
-      label: 'Lose et problem',
+      label: 'Løse et problem',
       icon: Icons.extension_outlined,
     ),
   ];
@@ -65,7 +61,6 @@ class _CreateProjectScreenState extends State<CreateProjectScreen>
       vsync: this,
       duration: const Duration(milliseconds: 850),
     )..forward();
-    loadSkills();
   }
 
   @override
@@ -76,87 +71,37 @@ class _CreateProjectScreenState extends State<CreateProjectScreen>
     super.dispose();
   }
 
-  Future<void> loadSkills() async {
-    final response = await Supabase.instance.client
-        .from('skills')
-        .select()
-        .order('name');
-    if (mounted) {
-      setState(() {
-        allSkills = List<Map<String, dynamic>>.from(response);
-      });
-    }
-  }
-
-  Future<void> createProject() async {
+  Future<void> _goToStepTwo() async {
     if (titleController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Tittel kan ikke være tom')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tittel kan ikke være tom')),
+      );
       return;
     }
 
     if (selectedType == null || selectedGoal == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Velg både prosjekttype og prosjektmål')),
+        const SnackBar(
+          content: Text('Velg både prosjekttype og prosjektmål'),
+        ),
       );
       return;
     }
 
-    setState(() {
-      isLoading = true;
-    });
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CreateProjectStep2Screen(
+          title: titleController.text.trim(),
+          description: descriptionController.text.trim(),
+          selectedType: selectedType!,
+          selectedGoal: selectedGoal!,
+        ),
+      ),
+    );
 
-    try {
-      final userId = Supabase.instance.client.auth.currentUser!.id;
-
-      // opprett prosjekt
-      final project = await Supabase.instance.client
-          .from('projects')
-          .insert({
-            'owner_id': userId,
-            'title': titleController.text.trim(),
-            'description': descriptionController.text.trim(),
-            'max_members': maxMembers,
-            'project_type': selectedType,
-            'project_goal': selectedGoal,
-          })
-          .select()
-          .single();
-
-      // legg til skills
-      if (selectedSkillIds.isNotEmpty) {
-        await Supabase.instance.client
-            .from('project_skills')
-            .insert(
-              selectedSkillIds
-                  .map(
-                    (skillId) => {
-                      'project_id': project['id'],
-                      'skill_id': skillId,
-                    },
-                  )
-                  .toList(),
-            );
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Prosjekt opprettet!')));
-        Navigator.pop(context, true); // true = refresh feed
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Feil: $e')));
-      }
-    } finally {
-      if (mounted)
-        setState(() {
-          isLoading = false;
-        });
+    if (mounted && result == true) {
+      Navigator.pop(context, true);
     }
   }
 
@@ -370,36 +315,6 @@ class _CreateProjectScreenState extends State<CreateProjectScreen>
                           ),
                           const SizedBox(height: 16),
                           _staggered(
-                            index: 9,
-                            child: _sectionLabel('Maks medlemmer'),
-                          ),
-                          const SizedBox(height: 8),
-                          _staggered(
-                            index: 10,
-                            child: DropdownButtonFormField<int>(
-                              value: maxMembers,
-                              dropdownColor: _panel,
-                              style: mono.bodyMedium?.copyWith(
-                                color: Colors.white,
-                              ),
-                              decoration: _inputDecoration(),
-                              items: List.generate(9, (i) => i + 2)
-                                  .map(
-                                    (n) => DropdownMenuItem(
-                                      value: n,
-                                      child: Text('$n', style: mono.bodyMedium),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: (value) {
-                                if (value != null) {
-                                  setState(() => maxMembers = value);
-                                }
-                              },
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          _staggered(
                             index: 11,
                             child: _sectionLabel('Prosjektmål'),
                           ),
@@ -463,67 +378,13 @@ class _CreateProjectScreenState extends State<CreateProjectScreen>
                               }).toList(),
                             ),
                           ),
-                          const SizedBox(height: 16),
-                          _staggered(
-                            index: 14,
-                            child: _sectionLabel('Ønskede ferdigheter'),
-                          ),
-                          const SizedBox(height: 8),
-                          _staggered(
-                            index: 15,
-                            child: Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: allSkills.map((skill) {
-                                final isSelected = selectedSkillIds.contains(
-                                  skill['id'],
-                                );
-                                return FilterChip(
-                                  selected: isSelected,
-                                  label: Text(
-                                    skill['name'],
-                                    style: mono.bodySmall,
-                                  ),
-                                  onSelected: (selected) {
-                                    setState(() {
-                                      if (selected) {
-                                        selectedSkillIds.add(skill['id']);
-                                      } else {
-                                        selectedSkillIds.remove(skill['id']);
-                                      }
-                                    });
-                                  },
-                                  showCheckmark: false,
-                                  color: WidgetStateProperty.resolveWith((
-                                    states,
-                                  ) {
-                                    if (states.contains(WidgetState.selected)) {
-                                      return _accent.withValues(alpha: 0.18);
-                                    }
-                                    return _panel;
-                                  }),
-                                  side: BorderSide(
-                                    color: isSelected ? _accent : _border,
-                                  ),
-                                  shape: const RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.zero,
-                                  ),
-                                  labelStyle: TextStyle(
-                                    color: isSelected ? Colors.white : _muted,
-                                  ),
-                                );
-                              }).toList(),
-                            ),
-                          ),
                           const SizedBox(height: 22),
                           _staggered(
-                            index: 16,
+                            index: 14,
                             child: SizedBox(
                               width: double.infinity,
                               child: ElevatedButton(
-                                onPressed: isLoading || !isFormValid
-                                    ? null
-                                    : createProject,
+                                onPressed: !isFormValid ? null : _goToStepTwo,
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: isFormValid
                                       ? _accent
@@ -544,19 +405,10 @@ class _CreateProjectScreenState extends State<CreateProjectScreen>
                                     letterSpacing: 2,
                                   ),
                                 ),
-                                child: isLoading
-                                    ? const SizedBox(
-                                        height: 20,
-                                        width: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : const Text('NESTE'),
+                                child: const Text('NESTE'),
                               ),
                             ),
                           ),
-                          const SizedBox(height: 8),
                         ],
                       ),
                     ),
