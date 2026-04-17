@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'edit_skills_screen.dart';
+
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -79,17 +81,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required String university,
     required String githubUrl,
     required String studyProgram,
-    required String year,
+    required int? year,
     required String linkedinUrl,
     required String websiteUrl,
     required bool availabilityOpen,
   }) async {
     final userId = Supabase.instance.client.auth.currentUser!.id;
-
-    final normalizedYear = _normalizedYear(year);
-    if (normalizedYear == _InvalidYear.value) {
-      throw const FormatException('Årstrinn må være et gyldig tall');
-    }
 
     final updates = {
       'display_name': _normalizeOptionalText(displayName),
@@ -97,7 +94,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       'university': _normalizeOptionalText(university),
       'github_url': _normalizeOptionalText(githubUrl),
       'study_program': _normalizeOptionalText(studyProgram),
-      'year': normalizedYear,
+      'year': year,
       'linkedin_url': _normalizeOptionalText(linkedinUrl),
       'website_url': _normalizeOptionalText(websiteUrl),
       'availability': availabilityOpen,
@@ -141,9 +138,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final studyProgramController = TextEditingController(
       text: _profile?['study_program']?.toString() ?? '',
     );
-    final yearController = TextEditingController(
-      text: _profile?['year']?.toString() ?? '',
-    );
     final linkedinController = TextEditingController(
       text: _profile?['linkedin_url']?.toString() ?? '',
     );
@@ -155,6 +149,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       builder: (dialogContext) {
         var isSaving = false;
+        final existingYear = _profile?['year'];
+        var selectedYear = existingYear is int
+            ? existingYear
+            : int.tryParse(existingYear?.toString() ?? '');
+        if (selectedYear != null && (selectedYear < 1 || selectedYear > 5)) {
+          selectedYear = null;
+        }
         var availabilityOpen = _availabilityFromProfile(_profile?['availability']);
         return StatefulBuilder(
           builder: (context, setDialogState) {
@@ -201,12 +202,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                     const SizedBox(height: 10),
-                    TextField(
-                      controller: yearController,
-                      keyboardType: TextInputType.number,
+                    DropdownButtonFormField<int>(
+                      initialValue: selectedYear,
+                      dropdownColor: _panel,
                       decoration: const InputDecoration(
                         labelText: 'Årstrinn',
                       ),
+                      items: const [1, 2, 3, 4, 5]
+                          .map(
+                            (year) => DropdownMenuItem<int>(
+                              value: year,
+                              child: Text('År $year'),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: isSaving
+                          ? null
+                          : (value) {
+                              setDialogState(() {
+                                selectedYear = value;
+                              });
+                            },
                     ),
                     const SizedBox(height: 10),
                     Container(
@@ -291,7 +307,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               university: universityController.text,
                               githubUrl: githubController.text,
                               studyProgram: studyProgramController.text,
-                              year: yearController.text,
+                              year: selectedYear,
                               linkedinUrl: linkedinController.text,
                               websiteUrl: websiteController.text,
                               availabilityOpen: availabilityOpen,
@@ -332,15 +348,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
         );
       },
     );
+  }
 
-    nameController.dispose();
-    bioController.dispose();
-    universityController.dispose();
-    githubController.dispose();
-    studyProgramController.dispose();
-    yearController.dispose();
-    linkedinController.dispose();
-    websiteController.dispose();
+  Future<void> _openSkillsEditor() async {
+    final changed = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const EditSkillsScreen()),
+    );
+
+    if (changed == true && mounted) {
+      setState(() {
+        _isLoading = true;
+      });
+      await _loadProfile();
+    }
   }
 
   List<Map<String, dynamic>> get _filteredSkills {
@@ -471,6 +492,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               icon: const Icon(Icons.edit, size: 18),
               label: const Text('REDIGER PROFIL'),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _openSkillsEditor,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: BorderSide(color: _accent),
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.zero,
+                ),
+              ),
+              icon: const Icon(Icons.tune, size: 18),
+              label: const Text('REDIGER FERDIGHETER'),
             ),
             const SizedBox(height: 24),
 
@@ -753,18 +787,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return trimmed.isEmpty ? null : trimmed;
   }
 
-  int? _normalizedYear(String value) {
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) {
-      return null;
-    }
-    final parsed = int.tryParse(trimmed);
-    if (parsed == null || parsed < 1) {
-      return _InvalidYear.value;
-    }
-    return parsed;
-  }
-
   String _studyProgramAndYear() {
     final program = _displayValue(_profile?['study_program']);
     final year = _displayValue(_profile?['year']);
@@ -810,8 +832,4 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _availabilityLabel(dynamic value) {
     return _availabilityFromProfile(value) ? 'STATUS: ÅPEN' : 'STATUS: OPPTATT';
   }
-}
-
-class _InvalidYear {
-  static const int value = -9999;
 }
