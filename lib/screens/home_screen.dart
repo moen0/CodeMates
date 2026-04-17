@@ -6,27 +6,39 @@ import 'profile_screen.dart';
 import 'package:devconnect/widgets/brutalist_ui.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({super.key, this.initialIndex = 0});
+
+  final int initialIndex;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int currentIndex = 0;
+  late int currentIndex;
 
-  final screens = const [
-    FeedScreen(),
-    MyProjectsScreen(),
-    ApplicationsScreen(),
-    ProfileScreen(),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    currentIndex = widget.initialIndex;
+  }
 
   @override
   Widget build(BuildContext context) {
-    return BrutalistScaffold(
-      child: IndexedStack(index: currentIndex, children: screens),
+    final screens = [
+      FeedScreen(
+        onOpenProfileTab: () {
+          setState(() {
+            currentIndex = 3;
+          });
+        },
+      ),
+      const MyProjectsScreen(),
+      const ApplicationsScreen(),
+      const ProfileScreen(),
+    ];
 
+    return BrutalistScaffold(
       // Bunnnavigasjonen
       bottomNavigationBar: NavigationBar(
         backgroundColor: BrutalistPalette.panel,
@@ -55,6 +67,7 @@ class _HomeScreenState extends State<HomeScreen> {
           NavigationDestination(icon: Icon(Icons.person), label: 'Profil'),
         ],
       ),
+      child: IndexedStack(index: currentIndex, children: screens),
     );
   }
 }
