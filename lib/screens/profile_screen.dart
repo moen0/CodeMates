@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:devconnect/widgets/brutalist_ui.dart';
 
 import 'edit_skills_screen.dart';
 
@@ -11,8 +12,8 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  static const Color _panel = Color(0xFF1E1E1E);
-  static const Color _border = Color(0xFF333333);
+  static const Color _panel = BrutalistPalette.panel;
+  static const Color _border = BrutalistPalette.border;
 
   Color get _accent => Theme.of(context).colorScheme.primary;
 
@@ -163,7 +164,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               backgroundColor: _panel,
               shape: const RoundedRectangleBorder(
                 borderRadius: BorderRadius.zero,
-                side: BorderSide(color: Color(0xFF333333)),
+                side: BorderSide(color: BrutalistPalette.border),
               ),
               title: const Text('Rediger profil'),
               content: SingleChildScrollView(
@@ -172,32 +173,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   children: [
                     TextField(
                       controller: nameController,
-                      decoration: const InputDecoration(labelText: 'Navn *'),
+                      decoration: brutalistInputDecoration(labelText: 'Navn *'),
                     ),
                     const SizedBox(height: 10),
                     TextField(
                       controller: bioController,
                       maxLines: 3,
-                      decoration: const InputDecoration(labelText: 'Bio'),
+                      decoration: brutalistInputDecoration(labelText: 'Bio'),
                     ),
                     const SizedBox(height: 10),
                     TextField(
                       controller: universityController,
-                      decoration: const InputDecoration(
+                      decoration: brutalistInputDecoration(
                         labelText: 'Universitet',
                       ),
                     ),
                     const SizedBox(height: 10),
                     TextField(
                       controller: githubController,
-                      decoration: const InputDecoration(
+                      decoration: brutalistInputDecoration(
                         labelText: 'GitHub URL',
                       ),
                     ),
                     const SizedBox(height: 10),
                     TextField(
                       controller: studyProgramController,
-                      decoration: const InputDecoration(
+                      decoration: brutalistInputDecoration(
                         labelText: 'Studieprogram',
                       ),
                     ),
@@ -205,7 +206,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     DropdownButtonFormField<int>(
                       initialValue: selectedYear,
                       dropdownColor: _panel,
-                      decoration: const InputDecoration(
+                      decoration: brutalistInputDecoration(
                         labelText: 'Årstrinn',
                       ),
                       items: const [1, 2, 3, 4, 5]
@@ -276,11 +277,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   onPressed: isSaving
                       ? null
                       : () => Navigator.pop(dialogContext),
-                  style: OutlinedButton.styleFrom(
-                    shape: const RoundedRectangleBorder(
-                      borderRadius: BorderRadius.zero,
-                    ),
-                  ),
+                  style: brutalistOutlineButtonStyle(),
                   child: const Text('Avbryt'),
                 ),
                 ElevatedButton(
@@ -329,12 +326,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             }
                           }
                         },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _accent,
-                    shape: const RoundedRectangleBorder(
-                      borderRadius: BorderRadius.zero,
-                    ),
-                  ),
+                  style: brutalistPrimaryButtonStyle(),
                   child: isSaving
                       ? const SizedBox(
                           width: 64,
@@ -384,22 +376,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(
-          child: SizedBox(
-            width: 120,
-            child: LinearProgressIndicator(minHeight: 2),
-          ),
+      return const BrutalistScaffold(
+        appBar: BrutalistHeader(title: 'Profil'),
+        child: Center(
+          child: CircularProgressIndicator(),
         ),
       );
     }
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF121212),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            const SizedBox(height: 60),
+    return BrutalistScaffold(
+      appBar: const BrutalistHeader(title: 'Profil'),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          child: Column(
+            children: [
 
             // Profilkort-avatar uten runde former
             Container(
@@ -450,7 +441,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             // Bio
             if (_profile?['bio'] != null)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 40),
+                padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Text(
                   _profile!['bio'],
                   style: TextStyle(fontSize: 14, color: Colors.grey[500]),
@@ -483,26 +474,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 12),
             OutlinedButton.icon(
               onPressed: _showEditProfileDialog,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                side: BorderSide(color: _accent),
-                shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.zero,
-                ),
-              ),
+              style: brutalistOutlineButtonStyle(active: true),
               icon: const Icon(Icons.edit, size: 18),
               label: const Text('REDIGER PROFIL'),
             ),
             const SizedBox(height: 10),
             OutlinedButton.icon(
               onPressed: _openSkillsEditor,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                side: BorderSide(color: _accent),
-                shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.zero,
-                ),
-              ),
+              style: brutalistOutlineButtonStyle(),
               icon: const Icon(Icons.tune, size: 18),
               label: const Text('REDIGER FERDIGHETER'),
             ),
@@ -523,7 +502,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             // Aktivitet
             _buildActivitySection(),
             const SizedBox(height: 40),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -531,15 +511,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildInfoCard() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Container(
-        width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: BrutalistPanel(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: _panel,
-          borderRadius: BorderRadius.zero,
-          border: Border.all(color: _border),
-        ),
         child: Column(
           children: [
             Row(children: [
@@ -566,15 +540,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildLinks() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _linkIcon(Icons.code, _profile?['github_url']),
-        const SizedBox(width: 16),
-        _linkIcon(Icons.business, _profile?['linkedin_url']),
-        const SizedBox(width: 16),
-        _linkIcon(Icons.language, _profile?['website_url']),
-      ],
+    return BrutalistPanel(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _linkIcon(Icons.code, _profile?['github_url']),
+          const SizedBox(width: 16),
+          _linkIcon(Icons.business, _profile?['linkedin_url']),
+          const SizedBox(width: 16),
+          _linkIcon(Icons.language, _profile?['website_url']),
+        ],
+      ),
     );
   }
 
@@ -602,7 +579,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildSkillsSection() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -708,7 +685,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildActivitySection() {
     // TODO: hent reelle tall fra databasen
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -742,13 +719,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _statCard(String value, String label, Color valueColor) {
     return Expanded(
-      child: Container(
+      child: BrutalistPanel(
         padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          color: _panel,
-          borderRadius: BorderRadius.zero,
-          border: Border.all(color: _border),
-        ),
         child: Column(
           children: [
             Text(

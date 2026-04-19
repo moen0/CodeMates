@@ -584,7 +584,7 @@ class _CreateProjectStep2ScreenState extends State<CreateProjectStep2Screen>
                                   color: Colors.white,
                                 ),
                                 decoration: _inputDecoration(
-                                  hintText: 'Antall maaneder',
+                                  hintText: 'Antall måneder',
                                 ),
                               ),
                             ),
