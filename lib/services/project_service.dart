@@ -46,6 +46,27 @@ class ProjectService {
         );
   }
 
+  Future<List<Map<String, dynamic>>> getProjectMembers(String projectId) async {
+    final response = await supabase
+        .from('project_members')
+        .select('user_id, profiles:user_id(display_name, email)')
+        .eq('project_id', projectId);
+    return List<Map<String, dynamic>>.from(response);
+  }
+
+  Future<void> updateProject({
+    required String projectId,
+    required String title,
+    required String description,
+    String? meetingLink,
+  }) async {
+    await supabase.from('projects').update({
+      'title': title,
+      'description': description,
+      'meeting_link': meetingLink?.trim().isEmpty == true ? null : meetingLink?.trim(),
+    }).eq('id', projectId);
+  }
+
   String resolveSkillCategory(Map<String, dynamic> skill) {
     final rawCategory =
         skill['category'] ?? skill['type'] ?? skill['group'] ?? skill['area'];

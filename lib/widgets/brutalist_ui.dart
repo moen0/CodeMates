@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-// hoved palette for alle screens
+
 class BrutalistPalette {
   static const bg = Color(0xFF000000);
   static const panel = Color(0xFF111111);
@@ -51,12 +51,14 @@ class BrutalistHeader extends StatelessWidget implements PreferredSizeWidget {
     required this.title,
     this.bottom,
     this.leading,
+    this.actions,
     this.centerTitle = true,
   });
 
   final String title;
   final PreferredSizeWidget? bottom;
   final Widget? leading;
+  final List<Widget>? actions;
   final bool centerTitle;
 
   @override
@@ -77,6 +79,7 @@ class BrutalistHeader extends StatelessWidget implements PreferredSizeWidget {
         ),
       ),
       leading: leading,
+      actions: actions,
       bottom: bottom,
       shape: const Border(bottom: BorderSide(color: BrutalistPalette.border)),
     );
