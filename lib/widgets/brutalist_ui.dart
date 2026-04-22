@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-
+// hoved palette for alle screens
 class BrutalistPalette {
   static const bg = Color(0xFF000000);
   static const panel = Color(0xFF111111);
