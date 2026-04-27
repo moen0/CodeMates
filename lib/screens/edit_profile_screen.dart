@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'package:devconnect/widgets/brutalist_ui.dart';
 import 'home_screen.dart';
+import 'package:devconnect/widgets/brutalist_ui.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -12,6 +12,7 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
+  final _displayNameController = TextEditingController();
   final _bioController = TextEditingController();
   final _universityController = TextEditingController();
   final _studyProgramController = TextEditingController();
@@ -19,7 +20,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _linkedinController = TextEditingController();
   final _websiteController = TextEditingController();
 
-  final Map<int, _SelectedSkill> _selectedSkills = <int, _SelectedSkill>{};
+  final Map<int, _SelectedSkill> _selectedSkills = {};
 
   int _step = 0;
   bool _isLoadingSkills = true;
@@ -28,7 +29,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   int? _selectedYear;
   String _activeCategory = 'language';
 
-  List<Map<String, dynamic>> _allSkills = <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> _allSkills = [];
 
   static const _skillCategories = <_SkillCategory>[
     _SkillCategory(key: 'language', label: 'SPRÅK'),
@@ -46,7 +47,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.initState();
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) {
-      _isLoadingSkills = false;
       return;
     }
     _loadSkills();
@@ -54,6 +54,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   void dispose() {
+    _displayNameController.dispose();
     _bioController.dispose();
     _universityController.dispose();
     _studyProgramController.dispose();
@@ -96,6 +97,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
+  List<Map<String, dynamic>> _skillsForActiveCategory() {
+    return _allSkills.where((skill) {
+      final raw = (skill['category']?.toString() ?? '').toLowerCase().trim();
+      return _normaliseCategory(raw) == _activeCategory;
+    }).toList();
+  }
+
   String _normaliseCategory(String raw) {
     switch (raw) {
       case 'language':
@@ -129,13 +137,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       default:
         return raw;
     }
-  }
-
-  List<Map<String, dynamic>> _skillsForActiveCategory() {
-    return _allSkills.where((skill) {
-      final raw = (skill['category']?.toString() ?? '').toLowerCase().trim();
-      return _normaliseCategory(raw) == _activeCategory;
-    }).toList();
   }
 
   Future<String?> _pickProficiency() async {
@@ -183,7 +184,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
 
     final proficiency = await _pickProficiency();
-    if (proficiency == null || !mounted) {
+    if (proficiency == null) {
+      return;
+    }
+
+    if (!mounted) {
       return;
     }
 
@@ -206,6 +211,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     });
 
     final updates = {
+      'display_name': _normalise(_displayNameController.text),
       'bio': _normalise(_bioController.text),
       'email': currentUser.email,
       'university': _normalise(_universityController.text),
@@ -230,16 +236,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
       if (_selectedSkills.isNotEmpty) {
         await Supabase.instance.client.from('user_skills').insert(
-              _selectedSkills.values
-                  .map(
-                    (selected) => {
-                      'user_id': currentUser.id,
-                      'skill_id': selected.skill['id'],
-                      'proficiency': selected.proficiency,
-                    },
-                  )
-                  .toList(),
-            );
+          _selectedSkills.values
+              .map(
+                (selected) => {
+                  'user_id': currentUser.id,
+                  'skill_id': selected.skill['id'],
+                  'proficiency': selected.proficiency,
+                },
+              )
+              .toList(),
+        );
       }
 
       if (!mounted) {
@@ -272,6 +278,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final canGoNext = _displayNameController.text.trim().isNotEmpty;
+
     return BrutalistScaffold(
       appBar: const BrutalistHeader(title: 'Profiloppsett'),
       child: SafeArea(
@@ -285,7 +293,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 child: IndexedStack(
                   index: _step,
                   children: [
-                    _buildStepOne(),
+                    _buildStepOne(canGoNext),
                     _buildStepTwo(),
                   ],
                 ),
@@ -296,11 +304,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   width: double.infinity,
                   child: ElevatedButton(
                     style: brutalistPrimaryButtonStyle(),
-                    onPressed: () {
-                      setState(() {
-                        _step = 1;
-                      });
-                    },
+                    onPressed: canGoNext
+                        ? () {
+                            setState(() {
+                              _step = 1;
+                            });
+                          }
+                        : null,
                     child: const Text('Neste'),
                   ),
                 )
@@ -343,7 +353,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  Widget _buildStepOne() {
+  Widget _buildStepOne(bool canGoNext) {
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -371,7 +381,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   child: IconButton(
                     onPressed: () {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('TODO: bildevelger kommer senere')),
+                        const SnackBar(
+                          content: Text('TODO: bildevelger kommer senere'),
+                        ),
                       );
                     },
                     style: IconButton.styleFrom(
@@ -388,6 +400,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ),
           ),
           const SizedBox(height: 16),
+          BrutalistPanel(
+            child: TextField(
+              controller: _displayNameController,
+              onChanged: (_) => setState(() {}),
+              decoration: brutalistInputDecoration(
+                labelText: 'Visningsnavn *',
+                hintText: 'Hva vil du bli kalt?',
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
           BrutalistPanel(
             child: TextField(
               controller: _bioController,
@@ -452,6 +475,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               );
             }).toList(),
           ),
+          if (!canGoNext)
+            const Padding(
+              padding: EdgeInsets.only(top: 10),
+              child: Text(
+                'Visningsnavn må fylles inn for å gå videre.',
+                style: TextStyle(color: BrutalistPalette.muted),
+              ),
+            ),
         ],
       ),
     );
@@ -705,4 +736,5 @@ class _SelectedSkill {
   final Map<String, dynamic> skill;
   final String proficiency;
 }
+
 

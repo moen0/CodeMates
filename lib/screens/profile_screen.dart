@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:devconnect/widgets/brutalist_ui.dart';
 
@@ -21,6 +22,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   List<Map<String, dynamic>> _skills = [];
   String _selectedCategory = 'language';
   bool _isLoading = true;
+  bool _isUploadingAvatar = false;
 
   final _categories = {
     'language': 'SPRÅK',
@@ -73,6 +75,153 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Kunne ikke laste profil: $e')));
+    }
+  }
+
+  Future<void> _showAvatarSourceSheet() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: _panel,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.zero,
+        side: BorderSide(color: BrutalistPalette.border),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_camera_outlined,
+                    color: Colors.white),
+                title: const Text('Ta bilde',
+                    style: TextStyle(color: Colors.white)),
+                onTap: () => Navigator.pop(sheetContext, ImageSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined,
+                    color: Colors.white),
+                title: const Text('Velg fra galleri',
+                    style: TextStyle(color: Colors.white)),
+                onTap: () => Navigator.pop(sheetContext, ImageSource.gallery),
+              ),
+              if ((_profile?['avatar_url'] as String?)?.isNotEmpty ?? false)
+                ListTile(
+                  leading: const Icon(Icons.delete_outline,
+                      color: Colors.redAccent),
+                  title: const Text('Fjern profilbilde',
+                      style: TextStyle(color: Colors.redAccent)),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _removeAvatar();
+                  },
+                ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (source != null) {
+      await _pickAndUploadAvatar(source);
+    }
+  }
+
+  Future<void> _pickAndUploadAvatar(ImageSource source) async {
+    final picker = ImagePicker();
+    final XFile? picked = await picker.pickImage(
+      source: source,
+      maxWidth: 1024,
+      maxHeight: 1024,
+      imageQuality: 85,
+    );
+
+    if (picked == null) return;
+
+    setState(() => _isUploadingAvatar = true);
+
+    try {
+      final userId = Supabase.instance.client.auth.currentUser!.id;
+      final bytes = await picked.readAsBytes();
+
+      // Determine extension from the picked file
+      final ext = picked.path.split('.').last.toLowerCase();
+      final fileName = 'avatar.$ext';
+      final storagePath = '$userId/$fileName';
+
+      // Upload to Supabase Storage. upsert overwrites if it already exists.
+      await Supabase.instance.client.storage.from('avatars').uploadBinary(
+        storagePath,
+        bytes,
+        fileOptions: const FileOptions(upsert: true),
+      );
+
+      // Get public URL with cache buster so the new image shows immediately
+      final publicUrl = Supabase.instance.client.storage
+          .from('avatars')
+          .getPublicUrl(storagePath);
+      final bustedUrl =
+          '$publicUrl?t=${DateTime.now().millisecondsSinceEpoch}';
+
+      // Update profile row
+      await Supabase.instance.client
+          .from('profiles')
+          .update({'avatar_url': bustedUrl}).eq('id', userId);
+
+      if (!mounted) return;
+      setState(() {
+        _profile = {...?_profile, 'avatar_url': bustedUrl};
+        _isUploadingAvatar = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profilbilde oppdatert')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isUploadingAvatar = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Kunne ikke laste opp bilde: $e')),
+      );
+    }
+  }
+
+  Future<void> _removeAvatar() async {
+    setState(() => _isUploadingAvatar = true);
+    try {
+      final userId = Supabase.instance.client.auth.currentUser!.id;
+
+      // Try to remove any extension we might have stored
+      final candidates = ['avatar.jpg', 'avatar.jpeg', 'avatar.png', 'avatar.webp'];
+      for (final c in candidates) {
+        try {
+          await Supabase.instance.client.storage
+              .from('avatars')
+              .remove(['$userId/$c']);
+        } catch (_) {
+          // ignore individual failures
+        }
+      }
+
+      await Supabase.instance.client
+          .from('profiles')
+          .update({'avatar_url': null}).eq('id', userId);
+
+      if (!mounted) return;
+      setState(() {
+        _profile = {...?_profile, 'avatar_url': null};
+        _isUploadingAvatar = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profilbilde fjernet')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isUploadingAvatar = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Kunne ikke fjerne bilde: $e')),
+      );
     }
   }
 
@@ -212,18 +361,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       items: const [1, 2, 3, 4, 5]
                           .map(
                             (year) => DropdownMenuItem<int>(
-                              value: year,
-                              child: Text('År $year'),
-                            ),
-                          )
+                          value: year,
+                          child: Text('År $year'),
+                        ),
+                      )
                           .toList(),
                       onChanged: isSaving
                           ? null
                           : (value) {
-                              setDialogState(() {
-                                selectedYear = value;
-                              });
-                            },
+                        setDialogState(() {
+                          selectedYear = value;
+                        });
+                      },
                     ),
                     const SizedBox(height: 10),
                     Container(
@@ -247,10 +396,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             onChanged: isSaving
                                 ? null
                                 : (value) {
-                                    setDialogState(() {
-                                      availabilityOpen = value;
-                                    });
-                                  },
+                              setDialogState(() {
+                                availabilityOpen = value;
+                              });
+                            },
                           ),
                         ],
                       ),
@@ -284,54 +433,54 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   onPressed: isSaving
                       ? null
                       : () async {
-                          if (nameController.text.trim().isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Navn kan ikke være tomt'),
-                              ),
-                            );
-                            return;
-                          }
+                    if (nameController.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Navn kan ikke være tomt'),
+                        ),
+                      );
+                      return;
+                    }
 
-                          setDialogState(() {
-                            isSaving = true;
-                          });
+                    setDialogState(() {
+                      isSaving = true;
+                    });
 
-                          try {
-                            await _saveProfileEdits(
-                              displayName: nameController.text,
-                              bio: bioController.text,
-                              university: universityController.text,
-                              githubUrl: githubController.text,
-                              studyProgram: studyProgramController.text,
-                              year: selectedYear,
-                              linkedinUrl: linkedinController.text,
-                              websiteUrl: websiteController.text,
-                              availabilityOpen: availabilityOpen,
-                            );
+                    try {
+                      await _saveProfileEdits(
+                        displayName: nameController.text,
+                        bio: bioController.text,
+                        university: universityController.text,
+                        githubUrl: githubController.text,
+                        studyProgram: studyProgramController.text,
+                        year: selectedYear,
+                        linkedinUrl: linkedinController.text,
+                        websiteUrl: websiteController.text,
+                        availabilityOpen: availabilityOpen,
+                      );
 
-                            if (dialogContext.mounted) {
-                              Navigator.pop(dialogContext);
-                            }
-                          } catch (e) {
-                            if (dialogContext.mounted) {
-                              ScaffoldMessenger.of(dialogContext).showSnackBar(
-                                SnackBar(
-                                  content: Text('Kunne ikke lagre profil: $e'),
-                                ),
-                              );
-                              setDialogState(() {
-                                isSaving = false;
-                              });
-                            }
-                          }
-                        },
+                      if (dialogContext.mounted) {
+                        Navigator.pop(dialogContext);
+                      }
+                    } catch (e) {
+                      if (dialogContext.mounted) {
+                        ScaffoldMessenger.of(dialogContext).showSnackBar(
+                          SnackBar(
+                            content: Text('Kunne ikke lagre profil: $e'),
+                          ),
+                        );
+                        setDialogState(() {
+                          isSaving = false;
+                        });
+                      }
+                    }
+                  },
                   style: brutalistPrimaryButtonStyle(),
                   child: isSaving
                       ? const SizedBox(
-                          width: 64,
-                          child: LinearProgressIndicator(minHeight: 2),
-                        )
+                    width: 64,
+                    child: LinearProgressIndicator(minHeight: 2),
+                  )
                       : const Text('Lagre'),
                 ),
               ],
@@ -391,78 +540,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
           child: Column(
             children: [
+              _buildAvatar(),
+              const SizedBox(height: 16),
 
-            // Profilkort-avatar uten runde former
-            Container(
-              width: 96,
-              height: 96,
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: _accent,
-                  width: 2,
-                ),
-                color: _panel,
-              ),
-              child: _profile?['avatar_url'] != null
-                  ? Image.network(
-                      _profile!['avatar_url'],
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => const Icon(
-                        Icons.person,
-                        size: 40,
-                        color: Colors.grey,
-                      ),
-                    )
-                  : const Icon(Icons.person, size: 40, color: Colors.grey),
-            ),
-            const SizedBox(height: 16),
-
-            Text(
-              _availabilityLabel(_profile?['availability']),
-              style: TextStyle(
-                color: _accent,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.5,
-              ),
-            ),
-
-            // Navn
-            Text(
-              _profile?['display_name'] ?? 'Ukjent bruker',
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 6),
-
-            // Bio
-            if (_profile?['bio'] != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Text(
-                  _profile!['bio'],
-                  style: TextStyle(fontSize: 14, color: Colors.grey[500]),
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            const SizedBox(height: 12),
-
-            // Tilgjengelighet badge
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.zero,
-                border: Border.all(color: _accent, width: 1),
-              ),
-              child: Text(
-                _availabilityFromProfile(_profile?['availability'])
-                    ? 'ÅPEN FOR SAMARBEID'
-                    : 'OPPTATT NÅ',
+              Text(
+                _availabilityLabel(_profile?['availability']),
                 style: TextStyle(
                   color: _accent,
                   fontSize: 12,
@@ -470,41 +552,148 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   letterSpacing: 0.5,
                 ),
               ),
-            ),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: _showEditProfileDialog,
-              style: brutalistOutlineButtonStyle(active: true),
-              icon: const Icon(Icons.edit, size: 18),
-              label: const Text('REDIGER PROFIL'),
-            ),
-            const SizedBox(height: 10),
-            OutlinedButton.icon(
-              onPressed: _openSkillsEditor,
-              style: brutalistOutlineButtonStyle(),
-              icon: const Icon(Icons.tune, size: 18),
-              label: const Text('REDIGER FERDIGHETER'),
-            ),
-            const SizedBox(height: 24),
 
-            // Info kort
-            _buildInfoCard(),
-            const SizedBox(height: 20),
+              // Navn
+              Text(
+                _profile?['display_name'] ?? 'Ukjent bruker',
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 6),
 
-            // Lenke ikoner
-            _buildLinks(),
-            const SizedBox(height: 28),
+              // Bio
+              if (_profile?['bio'] != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Text(
+                    _profile!['bio'],
+                    style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              const SizedBox(height: 12),
 
-            // Ferdigheter
-            _buildSkillsSection(),
-            const SizedBox(height: 28),
+              // Tilgjengelighet badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.zero,
+                  border: Border.all(color: _accent, width: 1),
+                ),
+                child: Text(
+                  _availabilityFromProfile(_profile?['availability'])
+                      ? 'ÅPEN FOR SAMARBEID'
+                      : 'OPPTATT NÅ',
+                  style: TextStyle(
+                    color: _accent,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _showEditProfileDialog,
+                style: brutalistOutlineButtonStyle(active: true),
+                icon: const Icon(Icons.edit, size: 18),
+                label: const Text('REDIGER PROFIL'),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: _openSkillsEditor,
+                style: brutalistOutlineButtonStyle(),
+                icon: const Icon(Icons.tune, size: 18),
+                label: const Text('REDIGER FERDIGHETER'),
+              ),
+              const SizedBox(height: 24),
 
-            // Aktivitet
-            _buildActivitySection(),
-            const SizedBox(height: 40),
+              // Info kort
+              _buildInfoCard(),
+              const SizedBox(height: 20),
+
+              // Lenke ikoner
+              _buildLinks(),
+              const SizedBox(height: 28),
+
+              // Ferdigheter
+              _buildSkillsSection(),
+              const SizedBox(height: 28),
+
+              // Aktivitet
+              _buildActivitySection(),
+              const SizedBox(height: 40),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildAvatar() {
+    final url = _profile?['avatar_url'] as String?;
+    final hasImage = url != null && url.isNotEmpty;
+
+    return GestureDetector(
+      onTap: _isUploadingAvatar ? null : _showAvatarSourceSheet,
+      child: Stack(
+        children: [
+          Container(
+            width: 96,
+            height: 96,
+            decoration: BoxDecoration(
+              border: Border.all(color: _accent, width: 2),
+              color: _panel,
+            ),
+            child: hasImage
+                ? Image.network(
+              url,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => const Icon(
+                Icons.person,
+                size: 40,
+                color: Colors.grey,
+              ),
+            )
+                : const Icon(Icons.person, size: 40, color: Colors.grey),
+          ),
+          // Camera badge in lower right corner
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: _accent,
+                border: Border.all(color: _panel, width: 2),
+              ),
+              child: const Icon(
+                Icons.photo_camera,
+                size: 14,
+                color: Colors.black,
+              ),
+            ),
+          ),
+          // Upload overlay
+          if (_isUploadingAvatar)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.5),
+                child: const Center(
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

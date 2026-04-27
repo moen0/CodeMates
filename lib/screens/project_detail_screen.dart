@@ -5,6 +5,7 @@ import '/services/application_service.dart';
 import '/services/project_service.dart';
 import 'package:devconnect/widgets/brutalist_ui.dart';
 import 'edit_project_screen.dart';
+import 'projects_chat_screen.dart';
 
 class ProjectDetailScreen extends StatefulWidget {
   final Map<String, dynamic> project;
@@ -290,6 +291,27 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
 
               // Action buttons
               const SizedBox(height: 12),
+              if (isOwner || members.any((m) => m['user_id'] == userId))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      style: brutalistOutlineButtonStyle(),
+                      icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                      label: const Text('PROSJEKTCHAT'),
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ProjectChatScreen(
+                            projectId: project['id'],
+                            projectTitle: project['title'],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               if (!isOwner && project['status'] == 'recruiting')
                 SizedBox(
                   width: double.infinity,
@@ -299,8 +321,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                     child: isLoading
                         ? const SizedBox(width: 96, child: LinearProgressIndicator(minHeight: 2))
                         : hasApplied
-                            ? const Text('SØKNAD SENDT')
-                            : const Text('BLI MED'),
+                        ? const Text('SØKNAD SENDT')
+                        : const Text('BLI MED'),
                   ),
                 ),
             ],
