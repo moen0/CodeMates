@@ -38,7 +38,10 @@ class _HomeScreenState extends State<HomeScreen> {
       const ProfileScreen(),
     ];
 
-    return BrutalistScaffold(
+    // PopScope hindrer tilbake-knappen fra å forlate hovedskjermen
+    return PopScope(
+      canPop: false,
+      child: BrutalistScaffold(
       // Bunnnavigasjonen
       bottomNavigationBar: NavigationBar(
         backgroundColor: BrutalistPalette.panel,
@@ -68,6 +71,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       child: IndexedStack(index: currentIndex, children: screens),
+      ),
     );
   }
 }

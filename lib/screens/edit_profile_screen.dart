@@ -256,9 +256,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         const SnackBar(content: Text('Profil lagret!')),
       );
 
-      Navigator.pushReplacement(
+      // Tøm hele navigasjonsstakken så tilbake-knappen ikke tar brukeren tilbake i registreringsflyten
+      Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => const HomeScreen()),
+        (_) => false,
       );
     } catch (e) {
       if (!mounted) {

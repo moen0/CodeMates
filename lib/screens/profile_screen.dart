@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:devconnect/widgets/brutalist_ui.dart';
 
 import 'edit_skills_screen.dart';
+import 'welcome.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -491,6 +492,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  /// Logger ut brukeren og sender dem tilbake til velkomstskjermen.
+  Future<void> _signOut() async {
+    await Supabase.instance.client.auth.signOut();
+    if (!mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const Welcome()),
+      (_) => false,
+    );
+  }
+
   Future<void> _openSkillsEditor() async {
     final changed = await Navigator.push<bool>(
       context,
@@ -627,7 +639,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
               // Aktivitet
               _buildActivitySection(),
-              const SizedBox(height: 40),
+              const SizedBox(height: 32),
+
+              OutlinedButton.icon(
+                onPressed: _signOut,
+                style: brutalistOutlineButtonStyle().copyWith(
+                  side: WidgetStateProperty.all(
+                    const BorderSide(color: Colors.redAccent),
+                  ),
+                  foregroundColor: WidgetStateProperty.all(Colors.redAccent),
+                ),
+                icon: const Icon(Icons.logout, size: 18),
+                label: const Text('LOGG UT'),
+              ),
+              const SizedBox(height: 24),
             ],
           ),
         ),
@@ -654,7 +679,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ? Image.network(
               url,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => const Icon(
+              errorBuilder: (_, _, _) => const Icon(
                 Icons.person,
                 size: 40,
                 color: Colors.grey,
