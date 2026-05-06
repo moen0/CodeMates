@@ -25,11 +25,12 @@ class _LoginScreenState extends State<Login> {
         password: passwordController.text,
       );
       if (mounted) {
-        Navigator.pushReplacement(
+        // Tøm hele navigasjonsstakken så tilbake-knappen ikke tar brukeren til innloggingsskjermen
+        Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (_) => const HomeScreen()),
+          (_) => false,
         );
-        print('Innlogget!');
       }
     } on AuthException catch (e) {
       if (mounted) {
@@ -38,10 +39,11 @@ class _LoginScreenState extends State<Login> {
         ).showSnackBar(SnackBar(content: Text(e.message)));
       }
     } finally {
-      if (mounted)
+      if (mounted) {
         setState(() {
           isLoading = false;
         });
+      }
     }
   }
 
