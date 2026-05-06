@@ -7,7 +7,9 @@ import 'edit_skills_screen.dart';
 import 'welcome.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  const ProfileScreen({super.key, this.refreshToken = 0});
+
+  final int refreshToken;
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -21,6 +23,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Map<String, dynamic>? _profile;
   List<Map<String, dynamic>> _skills = [];
+  int _ownedProjectsCount = 0;
+  int _memberProjectsCount = 0;
   String _selectedCategory = 'language';
   bool _isLoading = true;
   bool _isUploadingAvatar = false;
@@ -42,20 +46,48 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _loadProfile();
   }
 
+  @override
+  void didUpdateWidget(covariant ProfileScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.refreshToken != widget.refreshToken) {
+      _loadProfile();
+    }
+  }
+
   Future<void> _loadProfile() async {
-    final userId = Supabase.instance.client.auth.currentUser!.id;
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+
+    if (userId == null) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      return;
+    }
 
     try {
-      final profileRes = await Supabase.instance.client
-          .from('profiles')
-          .select()
-          .eq('id', userId)
-          .single();
+      final results = await Future.wait<dynamic>([
+        Supabase.instance.client
+            .from('profiles')
+            .select()
+            .eq('id', userId)
+            .single(),
+        Supabase.instance.client
+            .from('user_skills')
+            .select('proficiency, skills(id, name, category)')
+            .eq('user_id', userId),
+        Supabase.instance.client
+            .from('projects')
+            .select('id')
+            .eq('owner_id', userId),
+        Supabase.instance.client
+            .from('project_members')
+            .select('project_id')
+            .eq('user_id', userId),
+      ]);
 
-      final skillsRes = await Supabase.instance.client
-          .from('user_skills')
-          .select('proficiency, skills(id, name, category)')
-          .eq('user_id', userId);
+      final profileRes = results[0] as Map<String, dynamic>;
+      final skillsRes = results[1] as List<dynamic>;
+      final ownedProjectsRes = results[2] as List<dynamic>;
+      final memberProjectsRes = results[3] as List<dynamic>;
 
       if (!mounted) {
         return;
@@ -64,6 +96,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       setState(() {
         _profile = profileRes;
         _skills = List<Map<String, dynamic>>.from(skillsRes);
+        _ownedProjectsCount = ownedProjectsRes.length;
+        _memberProjectsCount = memberProjectsRes.length;
         _isLoading = false;
       });
     } catch (e) {
@@ -897,7 +931,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildActivitySection() {
-    // TODO: hent reelle tall fra databasen
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Column(
@@ -915,9 +948,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 12),
           Row(
             children: [
-              _statCard('0', 'PROSJEKTER\nOPPRETTET', _accent),
+              _statCard('$_ownedProjectsCount', 'PROSJEKTER\nOPPRETTET', _accent),
               const SizedBox(width: 10),
-              _statCard('0', 'PROSJEKTER\nDELTATT', _accent),
+              _statCard('$_memberProjectsCount', 'PROSJEKTER\nDELTATT', _accent),
               const SizedBox(width: 10),
               _statCard(
                 _formatDate(_profile?['created_at']),

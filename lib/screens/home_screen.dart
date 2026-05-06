@@ -16,6 +16,8 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   late int currentIndex;
+  int _profileRefreshToken = 0;
+  int _myProjectsRefreshToken = 0;
 
   @override
   void initState() {
@@ -30,12 +32,13 @@ class _HomeScreenState extends State<HomeScreen> {
         onOpenProfileTab: () {
           setState(() {
             currentIndex = 3;
+            _profileRefreshToken++;
           });
         },
       ),
-      const MyProjectsScreen(),
+      MyProjectsScreen(refreshToken: _myProjectsRefreshToken),
       const ApplicationsScreen(),
-      const ProfileScreen(),
+      ProfileScreen(refreshToken: _profileRefreshToken),
     ];
 
     // PopScope hindrer tilbake-knappen fra å forlate hovedskjermen
@@ -58,6 +61,12 @@ class _HomeScreenState extends State<HomeScreen> {
           // setState trigger rebuild med ny fane
           setState(() {
             currentIndex = index;
+            if (index == 3) {
+              _profileRefreshToken++;
+            }
+            if (index == 1) {
+              _myProjectsRefreshToken++;
+            }
           });
         },
         destinations: const [
