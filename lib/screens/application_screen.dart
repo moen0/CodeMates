@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/application_service.dart';
 import 'package:devconnect/widgets/brutalist_ui.dart';
+import 'public_profile_screen.dart';
 
 class ApplicationsScreen extends StatefulWidget {
   const ApplicationsScreen({super.key});
@@ -115,9 +116,23 @@ class _ReceivedApplicationsTabState extends State<ReceivedApplicationsTab> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  profile?['display_name'] ?? profile?['email'] ?? 'Ukjent',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => PublicProfileScreen(userId: app['applicant_id']),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Text(
+                        profile?['display_name'] ?? profile?['email'] ?? 'Ukjent',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.open_in_new, size: 14, color: BrutalistPalette.muted),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 4),
                 if (app['message'] != null) Text(app['message']),

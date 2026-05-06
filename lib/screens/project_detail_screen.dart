@@ -6,6 +6,7 @@ import '/services/project_service.dart';
 import 'package:devconnect/widgets/brutalist_ui.dart';
 import 'edit_project_screen.dart';
 import 'projects_chat_screen.dart';
+import 'public_profile_screen.dart';
 
 class ProjectDetailScreen extends StatefulWidget {
   final Map<String, dynamic> project;
@@ -267,19 +268,29 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                         ...members.map((m) {
                           final profile = m['profiles'];
                           final name = profile?['display_name'] ?? profile?['email'] ?? 'Ukjent';
+                          final memberId = m['user_id'] as String?;
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 8),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: BrutalistPalette.border),
+                            child: InkWell(
+                              onTap: memberId == null ? null : () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => PublicProfileScreen(userId: memberId),
+                                ),
                               ),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.person_outline, size: 16, color: BrutalistPalette.muted),
-                                  const SizedBox(width: 8),
-                                  Text(name),
-                                ],
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: BrutalistPalette.border),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.person_outline, size: 16, color: BrutalistPalette.muted),
+                                    const SizedBox(width: 8),
+                                    Expanded(child: Text(name)),
+                                    const Icon(Icons.chevron_right, size: 16, color: BrutalistPalette.muted),
+                                  ],
+                                ),
                               ),
                             ),
                           );

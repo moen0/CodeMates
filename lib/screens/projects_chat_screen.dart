@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'public_profile_screen.dart';
 
 class ProjectChatScreen extends StatefulWidget {
   final String projectId;
@@ -158,11 +159,18 @@ class _ProjectChatScreenState extends State<ProjectChatScreen> {
                     return _MessageBubble(
                       content: msg['content'] as String,
                       isMe: isMe,
+                      senderId: senderId,
                       senderName: senderName,
                       avatarUrl: avatarUrl,
                       timestamp:
                       DateTime.parse(msg['created_at'] as String).toLocal(),
                       showHeader: isFirstInGroup,
+                      onAvatarTap: isMe ? null : () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => PublicProfileScreen(userId: senderId),
+                        ),
+                      ),
                     );
                   },
                 );
@@ -220,18 +228,22 @@ class _ProjectChatScreenState extends State<ProjectChatScreen> {
 class _MessageBubble extends StatelessWidget {
   final String content;
   final bool isMe;
+  final String senderId;
   final String senderName;
   final String? avatarUrl;
   final DateTime timestamp;
   final bool showHeader;
+  final VoidCallback? onAvatarTap;
 
   const _MessageBubble({
     required this.content,
     required this.isMe,
+    required this.senderId,
     required this.senderName,
     required this.avatarUrl,
     required this.timestamp,
     required this.showHeader,
+    this.onAvatarTap,
   });
 
   String _initials(String name) {
@@ -249,7 +261,7 @@ class _MessageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final bubbleColor =
-    isMe ? theme.colorScheme.primary : theme.colorScheme.surfaceVariant;
+    isMe ? theme.colorScheme.primary : theme.colorScheme.surfaceContainerHighest;
     final textColor = isMe
         ? theme.colorScheme.onPrimary
         : theme.colorScheme.onSurfaceVariant;
@@ -258,24 +270,26 @@ class _MessageBubble extends StatelessWidget {
     final avatar = SizedBox(
       width: 32,
       child: showHeader
-          ? CircleAvatar(
-        radius: 16,
-        backgroundColor: theme.colorScheme.primaryContainer,
-        backgroundImage:
-        (avatarUrl != null && avatarUrl!.isNotEmpty)
-            ? NetworkImage(avatarUrl!)
-            : null,
-        child: (avatarUrl == null || avatarUrl!.isEmpty)
-            ? Text(
-          _initials(senderName),
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            color: theme.colorScheme.onPrimaryContainer,
-          ),
-        )
-            : null,
-      )
+          ? GestureDetector(
+              onTap: onAvatarTap,
+              child: CircleAvatar(
+                radius: 16,
+                backgroundColor: theme.colorScheme.primaryContainer,
+                backgroundImage: (avatarUrl != null && avatarUrl!.isNotEmpty)
+                    ? NetworkImage(avatarUrl!)
+                    : null,
+                child: (avatarUrl == null || avatarUrl!.isEmpty)
+                    ? Text(
+                        _initials(senderName),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: theme.colorScheme.onPrimaryContainer,
+                        ),
+                      )
+                    : null,
+              ),
+            )
           : null,
     );
 

@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:devconnect/services/matching_service.dart';
 import 'project_detail_screen.dart';
 import 'create_project_screen.dart';
+import 'public_profile_screen.dart';
 import 'package:devconnect/widgets/brutalist_ui.dart';
 
 class FeedScreen extends StatefulWidget {
@@ -219,11 +220,25 @@ class _FeedScreenState extends State<FeedScreen> {
                                 overflow: TextOverflow.ellipsis,
                               ),
                               const SizedBox(height: 4),
-                              Text(
-                                'Av ${owner?['display_name'] ?? owner?['email'] ?? 'Ukjent'}',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: BrutalistPalette.muted,
+                              GestureDetector(
+                                onTap: () {
+                                  final ownerId = project['owner_id'] as String?;
+                                  if (ownerId == null) return;
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => PublicProfileScreen(userId: ownerId),
+                                    ),
+                                  );
+                                },
+                                child: Text(
+                                  'Av ${owner?['display_name'] ?? owner?['email'] ?? 'Ukjent'}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: BrutalistPalette.accent,
+                                    decoration: TextDecoration.underline,
+                                    decorationColor: BrutalistPalette.accent,
+                                  ),
                                 ),
                               ),
                             ],
