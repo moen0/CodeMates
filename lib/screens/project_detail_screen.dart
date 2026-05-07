@@ -11,7 +11,8 @@ import 'package:devconnect/services/auth_service.dart';
 
 class ProjectDetailScreen extends StatefulWidget {
   final Map<String, dynamic> project;
-  const ProjectDetailScreen({super.key, required this.project});
+  final bool isGuest;
+  const ProjectDetailScreen({super.key, required this.project, this.isGuest = false});
 
   @override
   State<ProjectDetailScreen> createState() => _ProjectDetailScreenState();
@@ -335,18 +336,31 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                   ),
                 ),
               if (!isOwner && project['status'] == 'recruiting')
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: brutalistPrimaryButtonStyle(),
-                    onPressed: hasApplied || isLoading ? null : showApplyDialog,
-                    child: isLoading
-                        ? const SizedBox(width: 96, child: LinearProgressIndicator(minHeight: 2))
-                        : hasApplied
-                        ? const Text('SØKNAD SENDT')
-                        : const Text('BLI MED'),
-                  ),
-                ),
+                widget.isGuest
+                    ? Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: BrutalistPalette.border),
+                        ),
+                        child: const Text(
+                          'Logg inn for å søke på prosjektet',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: BrutalistPalette.muted),
+                        ),
+                      )
+                    : SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          style: brutalistPrimaryButtonStyle(),
+                          onPressed: hasApplied || isLoading ? null : showApplyDialog,
+                          child: isLoading
+                              ? const SizedBox(width: 96, child: LinearProgressIndicator(minHeight: 2))
+                              : hasApplied
+                              ? const Text('SØKNAD SENDT')
+                              : const Text('BLI MED'),
+                        ),
+                      ),
             ],
           ),
         ),

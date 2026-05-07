@@ -7,12 +7,14 @@ import 'package:devconnect/models/skill.dart';
 import 'project_detail_screen.dart';
 import 'create_project_screen.dart';
 import 'public_profile_screen.dart';
+import 'register.dart';
 import 'package:devconnect/widgets/brutalist_ui.dart';
 
 class FeedScreen extends StatefulWidget {
-  const FeedScreen({super.key, this.onOpenProfileTab});
+  const FeedScreen({super.key, this.onOpenProfileTab, this.isGuest = false});
 
   final VoidCallback? onOpenProfileTab;
+  final bool isGuest;
 
   @override
   State<FeedScreen> createState() => _FeedScreenState();
@@ -169,20 +171,24 @@ class _FeedScreenState extends State<FeedScreen> {
 
     return BrutalistScaffold(
       appBar: const BrutalistHeader(title: 'Utforsk prosjekter'),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: BrutalistPalette.accent,
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-        onPressed: () async {
-          final result = await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const CreateProjectScreen()),
-          );
-          if (result == true) {
-            loadProjects();
-          }
-        },
-        child: const Icon(Icons.add),
-      ),
+      // Gjest-modus: sticky terminal-banner i bunn istedenfor navigasjonsmeny
+      bottomNavigationBar: widget.isGuest ? _buildGuestBanner(context) : null,
+      floatingActionButton: widget.isGuest
+          ? null
+          : FloatingActionButton(
+              backgroundColor: BrutalistPalette.accent,
+              shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+              onPressed: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const CreateProjectScreen()),
+                );
+                if (result == true) {
+                  loadProjects();
+                }
+              },
+              child: const Icon(Icons.add),
+            ),
       child: isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
@@ -203,7 +209,9 @@ class _FeedScreenState extends State<FeedScreen> {
                     if (showNoSkillsHint && index == 1) {
                       return _buildNoSkillsHint();
                     }
-                    return _buildEmptyResults();
+                    // Skil mellom "ingen prosjekter finnes" og "ingen søketreff"
+                    final hasActiveFilter = _searchQuery.isNotEmpty || _selectedSkillId != null;
+                    return _buildEmptyResults(isFilterEmpty: !hasActiveFilter);
                   }
 
                   final hintIndex = showNoSkillsHint ? 1 : -1;
@@ -328,6 +336,7 @@ class _FeedScreenState extends State<FeedScreen> {
                           MaterialPageRoute(
                             builder: (_) => ProjectDetailScreen(
                               project: _projectToMap(project),
+                              isGuest: widget.isGuest,
                             ),
                           ),
                         );
@@ -392,14 +401,78 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
-  Widget _buildEmptyResults() {
+  Widget _buildEmptyResults({required bool isFilterEmpty}) {
+    final message = isFilterEmpty
+        ? 'Ingen prosjekter publisert ennå'
+        : 'Ingen treff med dette søket';
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
       child: BrutalistPanel(
         padding: const EdgeInsets.all(16),
-        child: const Text(
-          'Ingen treff med dette søket',
-          style: TextStyle(color: BrutalistPalette.muted),
+        child: Text(
+          message,
+          style: const TextStyle(color: BrutalistPalette.muted),
+        ),
+      ),
+    );
+  }
+
+  // Terminal-stil gjest-banner nederst på skjermen
+  Widget _buildGuestBanner(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        color: BrutalistPalette.panel,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            const Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '> GJEST_MODE: read_only',
+                  style: TextStyle(
+                    color: BrutalistPalette.muted,
+                    fontSize: 11,
+                    letterSpacing: 1.0,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  '  registrer for full tilgang',
+                  style: TextStyle(
+                    color: BrutalistPalette.border,
+                    fontSize: 10,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+              ],
+            ),
+            const Spacer(),
+            GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const Register()),
+              ),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  border: Border.all(color: BrutalistPalette.accent),
+                ),
+                child: const Text(
+                  '[REGISTRER]',
+                  style: TextStyle(
+                    color: BrutalistPalette.accent,
+                    fontSize: 11,
+                    letterSpacing: 1.0,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -430,6 +503,25 @@ class _FeedScreenState extends State<FeedScreen> {
                   fontSize: 12,
                 ),
               ),
+              // Gjest-indikator ved siden av CONNECTED
+              if (widget.isGuest) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: BrutalistPalette.muted),
+                  ),
+                  child: const Text(
+                    'GJEST',
+                    style: TextStyle(
+                      color: BrutalistPalette.muted,
+                      fontSize: 9,
+                      letterSpacing: 1.2,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
               const Spacer(),
               Text(
                 _formatHeaderDate(DateTime.now()),
@@ -504,7 +596,7 @@ class _FeedScreenState extends State<FeedScreen> {
                 ),
               ),
               const SizedBox(width: 12),
-              _buildSortChip('match', 'MATCH', enabled: hasUser),
+              _buildSortChip('match', 'MATCH', enabled: true),
               const SizedBox(width: 8),
               _buildSortChip('newest', 'NYEST', enabled: true),
             ],
