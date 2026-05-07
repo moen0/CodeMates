@@ -98,4 +98,20 @@ class ApplicationService {
         .limit(1);
     return response.isNotEmpty;
   }
+
+  Future<List<Application>> getApplicationsForOwner(String ownerId) async {
+    final response = await supabase
+        .from('applications')
+        .select(
+          '*, profiles:applicant_id(id, display_name, email, bio, avatar_url), '
+          'projects!inner(*)',
+        )
+        .eq('projects.owner_id', ownerId)
+        .eq('status', 'pending')
+        .order('created_at', ascending: false);
+
+    return response
+        .map((row) => Application.fromMap(Map<String, dynamic>.from(row)))
+        .toList();
+  }
 }

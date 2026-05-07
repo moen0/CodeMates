@@ -4,8 +4,6 @@ import 'package:devconnect/widgets/brutalist_ui.dart';
 import 'public_profile_screen.dart';
 import '../models/application.dart';
 import 'package:devconnect/services/auth_service.dart';
-import 'package:devconnect/services/project_service.dart';
-import '../models/project.dart';
 
 class ApplicationsScreen extends StatefulWidget {
   const ApplicationsScreen({super.key});
@@ -64,8 +62,8 @@ class ReceivedApplicationsTab extends StatefulWidget {
 class _ReceivedApplicationsTabState extends State<ReceivedApplicationsTab> {
   List<Application> applications = [];
   bool isLoading = true;
+  String? errorText;
   final _authService = AuthService();
-  final _projectService = ProjectService();
 
   @override
   void initState() {
@@ -79,31 +77,40 @@ class _ReceivedApplicationsTabState extends State<ReceivedApplicationsTab> {
       if (mounted) {
         setState(() {
           isLoading = false;
+          errorText = 'Du må være logget inn';
         });
       }
       return;
     }
 
-    // Hent prosjekter jeg eier
-    final List<Project> myProjects = await _projectService.getOwnedProjects(userId);
-
-    final List<Application> allApps = [];
-    for (var project in myProjects) {
-      final apps = await widget.service.getProjectApplications(project.id);
-      allApps.addAll(apps);
-    }
-
-    if (mounted) {
-      setState(() {
-        applications = allApps;
-        isLoading = false;
-      });
+    try {
+      final apps = await widget.service.getApplicationsForOwner(userId);
+      if (mounted) {
+        setState(() {
+          applications = apps;
+          isLoading = false;
+          errorText = null;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+          errorText = 'Kunne ikke laste søknader';
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Kunne ikke laste søknader: $e')),
+        );
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     if (isLoading) return const Center(child: CircularProgressIndicator());
+    if (errorText != null) {
+      return Center(child: Text(errorText!));
+    }
     if (applications.isEmpty) {
       return const Center(child: Text('Ingen søknader å behandle'));
     }
