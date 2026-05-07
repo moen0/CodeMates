@@ -1,11 +1,16 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/project_member.dart';
+import '../models/skill.dart';
+import '../models/project.dart';
 
 class ProjectService {
   final supabase = Supabase.instance.client;
 
-  Future<List<Map<String, dynamic>>> getSkills() async {
+  Future<List<Skill>> getSkills() async {
     final response = await supabase.from('skills').select().order('name');
-    return List<Map<String, dynamic>>.from(response);
+    return response
+        .map((row) => Skill.fromMap(Map<String, dynamic>.from(row)))
+        .toList();
   }
 
   Future<void> createProject({
@@ -46,12 +51,14 @@ class ProjectService {
         );
   }
 
-  Future<List<Map<String, dynamic>>> getProjectMembers(String projectId) async {
+  Future<List<ProjectMember>> getProjectMembers(String projectId) async {
     final response = await supabase
         .from('project_members')
-        .select('user_id, profiles:user_id(display_name, email)')
+        .select('project_id, user_id, role, joined_at, profiles:user_id(display_name, email)')
         .eq('project_id', projectId);
-    return List<Map<String, dynamic>>.from(response);
+    return response
+        .map((row) => ProjectMember.fromMap(Map<String, dynamic>.from(row)))
+        .toList();
   }
 
   Future<void> updateProject({
@@ -65,6 +72,32 @@ class ProjectService {
       'description': description,
       'meeting_link': meetingLink?.trim().isEmpty == true ? null : meetingLink?.trim(),
     }).eq('id', projectId);
+  }
+
+  Future<List<Project>> getOwnedProjects(String userId) async {
+    final response = await supabase
+        .from('projects')
+        .select('id, owner_id, title, description, status, created_at, updated_at')
+        .eq('owner_id', userId);
+    return response
+        .map((row) => Project.fromMap(Map<String, dynamic>.from(row)))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>?> getProjectByIdWithDetails(String projectId) async {
+    final response = await supabase
+        .from('projects')
+        .select(
+          '*, profiles:owner_id(display_name, email), project_skills:project_id(*, skills(*)), project_members:project_id(*, profiles:user_id(display_name, email))',
+        )
+        .eq('id', projectId)
+        .maybeSingle();
+
+    if (response == null) {
+      return null;
+    }
+
+    return Map<String, dynamic>.from(response);
   }
 
   String resolveSkillCategory(Map<String, dynamic> skill) {
@@ -176,5 +209,53 @@ class ProjectService {
       default:
         return 'other';
     }
+  }
+
+  Future<List<Project>> getRecruitingProjects({String? excludeOwnerId}) async {
+    var query = supabase
+        .from('projects')
+        .select('*, profiles:owner_id(display_name, email)')
+        .eq('status', 'recruiting');
+
+    if (excludeOwnerId != null) {
+      query = query.neq('owner_id', excludeOwnerId);
+    }
+
+    final response = await query.order('created_at', ascending: false);
+    return response
+        .map((row) => Project.fromMap(Map<String, dynamic>.from(row)))
+        .toList();
+  }
+
+  Future<Map<String, List<Skill>>> getProjectSkillsForProjects(
+    List<String> projectIds,
+  ) async {
+    if (projectIds.isEmpty) {
+      return {};
+    }
+
+    final response = await supabase
+        .from('project_skills')
+        .select('project_id, skills(id, name, category)')
+        .inFilter('project_id', projectIds);
+
+    final projectSkills = <String, List<Skill>>{};
+    for (final row in response) {
+      final map = Map<String, dynamic>.from(row);
+      final projectId = map['project_id']?.toString();
+      final skillMap = map['skills'] as Map<String, dynamic>?;
+      if (projectId == null || skillMap == null) {
+        continue;
+      }
+
+      final skill = Skill.fromMap(skillMap);
+      projectSkills.putIfAbsent(projectId, () => <Skill>[]).add(skill);
+    }
+
+    return projectSkills;
+  }
+
+  Future<void> deleteProject(String projectId) async {
+    await supabase.from('projects').delete().eq('id', projectId);
   }
 }

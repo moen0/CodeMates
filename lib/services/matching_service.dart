@@ -69,8 +69,7 @@ class MatchingService {
     final weights = <int, double>{};
     for (final row in response) {
       final map = Map<String, dynamic>.from(row);
-      final rawSkillId = map['skill_id'];
-      final skillId = _toInt(rawSkillId);
+      final skillId = map['skill_id'] as int?;
       if (skillId == null) {
         continue;
       }
@@ -96,7 +95,7 @@ class MatchingService {
     final skillIds = <int>[];
     for (final row in response) {
       final map = Map<String, dynamic>.from(row);
-      final skillId = _toInt(map['skill_id']);
+      final skillId = map['skill_id'] as int?;
       if (skillId != null) {
         skillIds.add(skillId);
       }
@@ -134,13 +133,6 @@ class MatchingService {
       default:
         return 0.3;
     }
-  }
-
-  int? _toInt(dynamic value) {
-    if (value is int) return value;
-    if (value is num) return value.toInt();
-    if (value is String) return int.tryParse(value);
-    return null;
   }
 
 }

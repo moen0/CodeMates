@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/application.dart';
 
 class ApplicationService {
   final supabase = Supabase.instance.client;
@@ -14,23 +15,27 @@ class ApplicationService {
     });
   }
 
-  Future<List<Map<String, dynamic>>> getProjectApplications(String projectId) async {
+  Future<List<Application>> getProjectApplications(String projectId) async {
     final response = await supabase
         .from('applications')
         .select('*, profiles:applicant_id(display_name, email, bio)')
         .eq('project_id', projectId)
         .eq('status', 'pending');
-    return List<Map<String, dynamic>>.from(response);
+    return response
+        .map((row) => Application.fromMap(Map<String, dynamic>.from(row)))
+        .toList();
   }
 
   // Hent mine sendte søknader
-  Future<List<Map<String, dynamic>>> getMyApplications() async {
+  Future<List<Application>> getMyApplications() async {
     final userId = supabase.auth.currentUser!.id;
     final response = await supabase
         .from('applications')
         .select('*, projects:project_id(title, status)')
         .eq('applicant_id', userId);
-    return List<Map<String, dynamic>>.from(response);
+    return response
+        .map((row) => Application.fromMap(Map<String, dynamic>.from(row)))
+        .toList();
   }
 
   // Godkjenn søknad
@@ -79,5 +84,18 @@ class ApplicationService {
           .update({'status': 'active'})
           .eq('id', projectId);
     }
+  }
+
+  Future<bool> hasUserApplied({
+    required String projectId,
+    required String userId,
+  }) async {
+    final response = await supabase
+        .from('applications')
+        .select('id')
+        .eq('project_id', projectId)
+        .eq('applicant_id', userId)
+        .limit(1);
+    return response.isNotEmpty;
   }
 }
