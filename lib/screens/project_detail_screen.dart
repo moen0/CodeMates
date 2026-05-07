@@ -115,11 +115,22 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     if (!mounted) return;
     if (result == 'deleted') {
       Navigator.pop(context, 'deleted');
-    } else if (result == true) {
+      return;
+    }
+    if (result != null) {
       try {
         final refreshed = await _projectService.getProjectByIdWithDetails(project['id']);
-        if (refreshed != null && mounted) setState(() => project = refreshed);
-      } catch (_) {}
+        if (refreshed != null && mounted) {
+          setState(() => project = refreshed);
+          await _loadMembers();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Kunne ikke oppdatere visning: $e')),
+          );
+        }
+      }
     }
   }
 

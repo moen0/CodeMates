@@ -88,7 +88,7 @@ class ProjectService {
     final response = await supabase
         .from('projects')
         .select(
-          '*, profiles:owner_id(display_name, email), project_skills:project_id(*, skills(*)), project_members:project_id(*, profiles:user_id(display_name, email))',
+          '*, profiles:owner_id(display_name, email), project_skills(*, skills(*)), project_members(*, profiles:user_id(display_name, email))',
         )
         .eq('id', projectId)
         .maybeSingle();
