@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:devconnect/widgets/brutalist_ui.dart';
+import 'package:devconnect/services/profile_service.dart';
+import 'package:devconnect/models/profile.dart';
+import 'package:devconnect/models/user_skill.dart';
 
 /// Viser en annen brukers profil i lesemodus (ingen redigering).
 class PublicProfileScreen extends StatefulWidget {
@@ -13,8 +15,10 @@ class PublicProfileScreen extends StatefulWidget {
 }
 
 class _PublicProfileScreenState extends State<PublicProfileScreen> {
-  Map<String, dynamic>? _profile;
-  List<Map<String, dynamic>> _skills = [];
+  final _profileService = ProfileService();
+
+  Profile? _profile;
+  List<UserSkill> _skills = [];
   String _selectedCategory = 'language';
   bool _isLoading = true;
 
@@ -40,21 +44,13 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   /// Henter profil og ferdigheter for [widget.userId] fra Supabase.
   Future<void> _loadProfile() async {
     try {
-      final profileRes = await Supabase.instance.client
-          .from('profiles')
-          .select()
-          .eq('id', widget.userId)
-          .single();
-
-      final skillsRes = await Supabase.instance.client
-          .from('user_skills')
-          .select('proficiency, skills(id, name, category)')
-          .eq('user_id', widget.userId);
+      final profileRes = await _profileService.getProfile(widget.userId);
+      final skillsRes = await _profileService.getUserSkills(widget.userId);
 
       if (!mounted) return;
       setState(() {
         _profile = profileRes;
-        _skills = List<Map<String, dynamic>>.from(skillsRes);
+        _skills = skillsRes;
         _isLoading = false;
       });
     } catch (e) {
@@ -67,8 +63,8 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   }
 
   /// Returnerer ferdigheter filtrert på valgt kategori-tab.
-  List<Map<String, dynamic>> get _filteredSkills =>
-      _skills.where((s) => s['skills']['category'] == _selectedCategory).toList();
+  List<UserSkill> get _filteredSkills =>
+      _skills.where((s) => s.skill?.category == _selectedCategory).toList();
 
   /// Returnerer farge basert på ferdighetsnivå: grønn, gul eller grå.
   Color _proficiencyColor(String? level) {
@@ -83,16 +79,14 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   }
 
   /// Tolker tilgjengelighetsfeltet uavhengig av om det er bool eller streng.
-  bool _availabilityOpen(dynamic value) {
-    if (value is bool) return value;
-    final text = value?.toString().trim().toLowerCase() ?? '';
-    return text == 'open' || text == 'available' || text == 'true' || text == '1';
+  bool _availabilityOpen(bool? value) {
+    return value ?? true;
   }
 
   /// Bygger en lesbar tekst av studieprogram og årstrinn.
   String _studyLine() {
-    final program = _profile?['study_program']?.toString().trim() ?? '';
-    final year = _profile?['year']?.toString().trim() ?? '';
+    final program = _profile?.studyProgram?.trim() ?? '';
+    final year = _profile?.year?.toString().trim() ?? '';
     if (program.isEmpty && year.isEmpty) return 'Ikke angitt';
     if (year.isEmpty) return program;
     if (program.isEmpty) return 'År $year';
@@ -100,9 +94,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   }
 
   /// Formaterer en ISO-datostreng til norsk kortformat, f.eks. "Jan 2025".
-  String _formatDate(String? dateStr) {
-    if (dateStr == null) return '?';
-    final date = DateTime.tryParse(dateStr);
+  String _formatDate(DateTime? date) {
     if (date == null) return '?';
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Des'];
     return '${months[date.month - 1]} ${date.year}';
@@ -117,10 +109,10 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
       );
     }
 
-    final name = _profile?['display_name'] ?? 'Ukjent bruker';
-    final avatarUrl = _profile?['avatar_url'] as String?;
+    final name = _profile?.displayLabel ?? 'Ukjent bruker';
+    final avatarUrl = _profile?.avatarUrl;
     final hasImage = avatarUrl != null && avatarUrl.isNotEmpty;
-    final isOpen = _availabilityOpen(_profile?['availability']);
+    final isOpen = _availabilityOpen(_profile?.availability);
 
     return BrutalistScaffold(
       appBar: BrutalistHeader(title: name),
@@ -172,11 +164,11 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
               const SizedBox(height: 6),
 
               // Bio
-              if (_profile?['bio'] != null && _profile!['bio'].toString().isNotEmpty)
+              if ((_profile?.bio ?? '').isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Text(
-                    _profile!['bio'],
+                    _profile!.bio!,
                     style: TextStyle(fontSize: 14, color: Colors.grey[500]),
                     textAlign: TextAlign.center,
                   ),
@@ -210,7 +202,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                       Icon(Icons.school, size: 18, color: Colors.grey[400]),
                       const SizedBox(width: 10),
                       Text(
-                        _profile?['university'] ?? 'Ikke angitt',
+                        _profile?.university ?? 'Ikke angitt',
                         style: const TextStyle(color: Colors.white, fontSize: 14),
                       ),
                     ]),
@@ -228,7 +220,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                       Icon(Icons.calendar_today, size: 18, color: Colors.grey[400]),
                       const SizedBox(width: 10),
                       Text(
-                        'Medlem siden ${_formatDate(_profile?['created_at'])}',
+                        'Medlem siden ${_formatDate(_profile?.createdAt)}',
                         style: const TextStyle(color: Colors.white, fontSize: 14),
                       ),
                     ]),
@@ -243,11 +235,11 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    _linkIcon(Icons.code, _profile?['github_url']),
+                    _linkIcon(Icons.code, _profile?.githubUrl),
                     const SizedBox(width: 16),
-                    _linkIcon(Icons.business, _profile?['linkedin_url']),
+                    _linkIcon(Icons.business, _profile?.linkedinUrl),
                     const SizedBox(width: 16),
-                    _linkIcon(Icons.language, _profile?['website_url']),
+                    _linkIcon(Icons.language, _profile?.websiteUrl),
                   ],
                 ),
               ),
@@ -282,92 +274,102 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
 
   /// Bygger ferdighetsseksjonen med kategori-tabs og skill-chips.
   Widget _buildSkillsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'FERDIGHETER',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-            letterSpacing: 1,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'FERDIGHETER',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+              letterSpacing: 1,
+            ),
           ),
-        ),
-        const SizedBox(height: 12),
+          const SizedBox(height: 12),
 
-        // Kategori-tabs
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: _categories.entries.map((entry) {
-              final isSelected = _selectedCategory == entry.key;
-              return Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: GestureDetector(
-                  onTap: () => setState(() => _selectedCategory = entry.key),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? _accent.withValues(alpha: 0.2)
-                          : const Color(0xFF2A2A2A),
-                      border: isSelected
-                          ? Border.all(color: _accent)
-                          : Border.all(color: BrutalistPalette.border),
-                    ),
-                    child: Text(
-                      entry.value,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: isSelected ? _accent : Colors.grey[400],
+          // Kategori tabs
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: _categories.entries.map((entry) {
+                final isSelected = _selectedCategory == entry.key;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: GestureDetector(
+                    onTap: () => setState(() => _selectedCategory = entry.key),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? _accent.withValues(alpha: 0.2)
+                            : const Color(0xFF2A2A2A),
+                        borderRadius: BorderRadius.zero,
+                        border: isSelected
+                            ? Border.all(color: _accent, width: 1)
+                            : Border.all(color: BrutalistPalette.border),
+                      ),
+                      child: Text(
+                        entry.value,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isSelected ? _accent : Colors.grey[400],
+                        ),
                       ),
                     ),
                   ),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // Skill chips
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _filteredSkills.map((s) {
+              final color = _proficiencyColor(s.proficiency);
+              final name = s.skill?.name ?? 'Ukjent';
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2A2A2A),
+                  borderRadius: BorderRadius.zero,
+                  border: Border.all(color: BrutalistPalette.border),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      name,
+                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      width: 8,
+                      height: 8,
+                      color: color,
+                    ),
+                  ],
                 ),
               );
             }).toList(),
           ),
-        ),
-        const SizedBox(height: 14),
 
-        // Skill-chips
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _filteredSkills.map((s) {
-            final color = _proficiencyColor(s['proficiency']);
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFF2A2A2A),
-                border: Border.all(color: BrutalistPalette.border),
+          if (_filteredSkills.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'Ingen ferdigheter i denne kategorien',
+                style: TextStyle(color: Colors.grey[600], fontSize: 13),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    s['skills']['name'],
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(width: 8, height: 8, color: color),
-                ],
-              ),
-            );
-          }).toList(),
-        ),
-
-        if (_filteredSkills.isEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(
-              'Ingen ferdigheter i denne kategorien',
-              style: TextStyle(color: Colors.grey[600], fontSize: 13),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 }

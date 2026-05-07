@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:devconnect/widgets/brutalist_ui.dart';
+import 'package:devconnect/services/auth_service.dart';
+import 'package:devconnect/services/profile_service.dart';
+import 'package:devconnect/models/skill.dart';
 
 class EditSkillsScreen extends StatefulWidget {
   const EditSkillsScreen({super.key});
@@ -24,9 +26,13 @@ class _EditSkillsScreenState extends State<EditSkillsScreen> {
   };
 
   final TextEditingController _searchController = TextEditingController();
-  final Map<int, String> _selectedSkills = <int, String>{};
 
-  List<Map<String, dynamic>> _skills = <Map<String, dynamic>>[];
+  final _authService = AuthService();
+  final _profileService = ProfileService();
+
+  final Map<String, String> _selectedSkills = <String, String>{};
+
+  List<Skill> _skills = <Skill>[];
   bool _isLoading = true;
   bool _isSaving = false;
   String _activeCategory = 'language';
@@ -45,8 +51,8 @@ class _EditSkillsScreenState extends State<EditSkillsScreen> {
   }
 
   Future<void> _loadData() async {
-    final currentUser = Supabase.instance.client.auth.currentUser;
-    if (currentUser == null) {
+    final currentUserId = _authService.currentUserId;
+    if (currentUserId == null) {
       if (!mounted) {
         return;
       }
@@ -60,21 +66,14 @@ class _EditSkillsScreenState extends State<EditSkillsScreen> {
     }
 
     try {
-      final skillsResponse = await Supabase.instance.client
-          .from('skills')
-          .select('id, name, category')
-          .order('name');
+      final skillsResponse = await _profileService.getAllSkills();
+      final userSkillsResponse = await _profileService.getUserSkills(currentUserId);
 
-      final userSkillsResponse = await Supabase.instance.client
-          .from('user_skills')
-          .select('skill_id, proficiency')
-          .eq('user_id', currentUser.id);
-
-      final selected = <int, String>{};
+      final selected = <String, String>{};
       for (final row in userSkillsResponse) {
-        final skillId = row['skill_id'] as int?;
-        final proficiency = row['proficiency']?.toString();
-        if (skillId == null || proficiency == null) {
+        final skillId = row.skillId;
+        final proficiency = row.proficiency;
+        if (skillId.isEmpty || proficiency.isEmpty) {
           continue;
         }
         selected[skillId] = proficiency;
@@ -85,7 +84,7 @@ class _EditSkillsScreenState extends State<EditSkillsScreen> {
       }
 
       setState(() {
-        _skills = List<Map<String, dynamic>>.from(skillsResponse);
+        _skills = skillsResponse;
         _selectedSkills
           ..clear()
           ..addAll(selected);
@@ -175,8 +174,8 @@ class _EditSkillsScreenState extends State<EditSkillsScreen> {
     );
   }
 
-  Future<void> _toggleSkill(Map<String, dynamic> skill) async {
-    final skillId = skill['id'] as int;
+  Future<void> _toggleSkill(Skill skill) async {
+    final skillId = skill.id;
     final existing = _selectedSkills[skillId];
 
     if (existing != null) {
@@ -189,7 +188,7 @@ class _EditSkillsScreenState extends State<EditSkillsScreen> {
               borderRadius: BorderRadius.zero,
               side: BorderSide(color: BrutalistPalette.border),
             ),
-            title: Text(skill['name'].toString()),
+            title: Text(skill.name),
             content: const Text('Vil du endre nivå eller fjerne ferdigheten?'),
             actions: [
               OutlinedButton(
@@ -234,8 +233,8 @@ class _EditSkillsScreenState extends State<EditSkillsScreen> {
   }
 
   Future<void> _saveSkills() async {
-    final currentUser = Supabase.instance.client.auth.currentUser;
-    if (currentUser == null) {
+    final currentUserId = _authService.currentUserId;
+    if (currentUserId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Du må være logget inn for å lagre ferdigheter.')),
       );
@@ -247,23 +246,18 @@ class _EditSkillsScreenState extends State<EditSkillsScreen> {
     });
 
     try {
-      await Supabase.instance.client
-          .from('user_skills')
-          .delete()
-          .eq('user_id', currentUser.id);
+      await _profileService.clearUserSkills(currentUserId);
 
       if (_selectedSkills.isNotEmpty) {
-        await Supabase.instance.client.from('user_skills').insert(
-              _selectedSkills.entries
-                  .map(
-                    (entry) => {
-                      'user_id': currentUser.id,
-                      'skill_id': entry.key,
-                      'proficiency': entry.value,
-                    },
-                  )
-                  .toList(),
-            );
+        await Future.wait(
+          _selectedSkills.entries.map(
+            (entry) => _profileService.addUserSkill(
+              userId: currentUserId,
+              skillId: entry.key,
+              proficiency: entry.value,
+            ),
+          ),
+        );
       }
 
       if (!mounted) {
@@ -290,17 +284,17 @@ class _EditSkillsScreenState extends State<EditSkillsScreen> {
     }
   }
 
-  List<Map<String, dynamic>> get _filteredSkills {
+  List<Skill> get _filteredSkills {
     final term = _searchTerm.toLowerCase();
     return _skills.where((skill) {
-      final category = _normaliseCategory(skill['category']);
+      final category = _normaliseCategory(skill.category);
       if (category != _activeCategory) {
         return false;
       }
       if (term.isEmpty) {
         return true;
       }
-      final name = skill['name']?.toString().toLowerCase() ?? '';
+      final name = skill.name.toLowerCase();
       return name.contains(term);
     }).toList();
   }
@@ -373,8 +367,8 @@ class _EditSkillsScreenState extends State<EditSkillsScreen> {
                           runSpacing: 8,
                           children: _selectedSkills.entries.map((entry) {
                             final skill = _skills.firstWhere(
-                              (item) => item['id'] == entry.key,
-                              orElse: () => {'name': 'Ukjent'},
+                              (item) => item.id == entry.key,
+                              orElse: () => const Skill(id: '', name: 'Ukjent'),
                             );
                             return Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -390,7 +384,7 @@ class _EditSkillsScreenState extends State<EditSkillsScreen> {
                                     color: _proficiencyColor(entry.value),
                                   ),
                                   const SizedBox(width: 8),
-                                  Text(skill['name'].toString()),
+                                  Text(skill.name),
                                   const SizedBox(width: 8),
                                   InkWell(
                                     onTap: () {
@@ -420,7 +414,7 @@ class _EditSkillsScreenState extends State<EditSkillsScreen> {
                                 spacing: 8,
                                 runSpacing: 8,
                                 children: _filteredSkills.map((skill) {
-                                  final skillId = skill['id'] as int;
+                                  final skillId = skill.id;
                                   final selectedProficiency = _selectedSkills[skillId];
                                   final isSelected = selectedProficiency != null;
                                   return InkWell(
@@ -440,7 +434,7 @@ class _EditSkillsScreenState extends State<EditSkillsScreen> {
                                       child: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Text(skill['name'].toString()),
+                                          Text(skill.name),
                                           if (isSelected) ...[
                                             const SizedBox(width: 8),
                                             Container(

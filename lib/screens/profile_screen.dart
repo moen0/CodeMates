@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:devconnect/widgets/brutalist_ui.dart';
+import 'package:devconnect/services/auth_service.dart';
+import 'package:devconnect/services/profile_service.dart';
+import 'package:devconnect/models/profile.dart';
+import 'package:devconnect/models/user_skill.dart';
 
 import 'edit_skills_screen.dart';
 import 'welcome.dart';
@@ -21,8 +24,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Color get _accent => Theme.of(context).colorScheme.primary;
 
-  Map<String, dynamic>? _profile;
-  List<Map<String, dynamic>> _skills = [];
+  final _authService = AuthService();
+  final _profileService = ProfileService();
+
+  Profile? _profile;
+  List<UserSkill> _skills = [];
   int _ownedProjectsCount = 0;
   int _memberProjectsCount = 0;
   String _selectedCategory = 'language';
@@ -55,7 +61,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadProfile() async {
-    final userId = Supabase.instance.client.auth.currentUser?.id;
+    final userId = _authService.currentUserId;
 
     if (userId == null) {
       if (!mounted) return;
@@ -65,29 +71,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     try {
       final results = await Future.wait<dynamic>([
-        Supabase.instance.client
-            .from('profiles')
-            .select()
-            .eq('id', userId)
-            .single(),
-        Supabase.instance.client
-            .from('user_skills')
-            .select('proficiency, skills(id, name, category)')
-            .eq('user_id', userId),
-        Supabase.instance.client
-            .from('projects')
-            .select('id')
-            .eq('owner_id', userId),
-        Supabase.instance.client
-            .from('project_members')
-            .select('project_id')
-            .eq('user_id', userId),
+        _profileService.getProfile(userId),
+        _profileService.getUserSkills(userId),
+        _profileService.getOwnedProjectsCount(userId),
+        _profileService.getMemberProjectsCount(userId),
       ]);
 
-      final profileRes = results[0] as Map<String, dynamic>;
-      final skillsRes = results[1] as List<dynamic>;
-      final ownedProjectsRes = results[2] as List<dynamic>;
-      final memberProjectsRes = results[3] as List<dynamic>;
+      final profileRes = results[0] as Profile?;
+      final skillsRes = results[1] as List<UserSkill>;
+      final ownedProjectsRes = results[2] as int;
+      final memberProjectsRes = results[3] as int;
 
       if (!mounted) {
         return;
@@ -95,9 +88,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       setState(() {
         _profile = profileRes;
-        _skills = List<Map<String, dynamic>>.from(skillsRes);
-        _ownedProjectsCount = ownedProjectsRes.length;
-        _memberProjectsCount = memberProjectsRes.length;
+        _skills = skillsRes;
+        _ownedProjectsCount = ownedProjectsRes;
+        _memberProjectsCount = memberProjectsRes;
         _isLoading = false;
       });
     } catch (e) {
@@ -140,7 +133,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     style: TextStyle(color: Colors.white)),
                 onTap: () => Navigator.pop(sheetContext, ImageSource.gallery),
               ),
-              if ((_profile?['avatar_url'] as String?)?.isNotEmpty ?? false)
+              if ((_profile?.avatarUrl ?? '').isNotEmpty)
                 ListTile(
                   leading: const Icon(Icons.delete_outline,
                       color: Colors.redAccent),
@@ -173,39 +166,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (picked == null) return;
 
+    final userId = _authService.currentUserId;
+    if (userId == null) {
+      return;
+    }
+
     setState(() => _isUploadingAvatar = true);
 
     try {
-      final userId = Supabase.instance.client.auth.currentUser!.id;
       final bytes = await picked.readAsBytes();
-
-      // Determine extension from the picked file
       final ext = picked.path.split('.').last.toLowerCase();
-      final fileName = 'avatar.$ext';
-      final storagePath = '$userId/$fileName';
 
-      // Upload to Supabase Storage. upsert overwrites if it already exists.
-      await Supabase.instance.client.storage.from('avatars').uploadBinary(
-        storagePath,
-        bytes,
-        fileOptions: const FileOptions(upsert: true),
+      final bustedUrl = await _profileService.uploadAvatar(
+        userId: userId,
+        bytes: bytes,
+        extension: ext,
       );
-
-      // Get public URL with cache buster so the new image shows immediately
-      final publicUrl = Supabase.instance.client.storage
-          .from('avatars')
-          .getPublicUrl(storagePath);
-      final bustedUrl =
-          '$publicUrl?t=${DateTime.now().millisecondsSinceEpoch}';
-
-      // Update profile row
-      await Supabase.instance.client
-          .from('profiles')
-          .update({'avatar_url': bustedUrl}).eq('id', userId);
 
       if (!mounted) return;
       setState(() {
-        _profile = {...?_profile, 'avatar_url': bustedUrl};
+        _profile = _profile?.copyWith(avatarUrl: bustedUrl);
         _isUploadingAvatar = false;
       });
 
@@ -222,29 +202,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _removeAvatar() async {
+    final userId = _authService.currentUserId;
+    if (userId == null) {
+      return;
+    }
+
     setState(() => _isUploadingAvatar = true);
     try {
-      final userId = Supabase.instance.client.auth.currentUser!.id;
-
-      // Try to remove any extension we might have stored
-      final candidates = ['avatar.jpg', 'avatar.jpeg', 'avatar.png', 'avatar.webp'];
-      for (final c in candidates) {
-        try {
-          await Supabase.instance.client.storage
-              .from('avatars')
-              .remove(['$userId/$c']);
-        } catch (_) {
-          // ignore individual failures
-        }
-      }
-
-      await Supabase.instance.client
-          .from('profiles')
-          .update({'avatar_url': null}).eq('id', userId);
+      await _profileService.removeAvatar(userId: userId);
 
       if (!mounted) return;
       setState(() {
-        _profile = {...?_profile, 'avatar_url': null};
+        _profile = _profile?.copyWith(avatarUrl: null);
         _isUploadingAvatar = false;
       });
 
@@ -271,35 +240,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required String websiteUrl,
     required bool availabilityOpen,
   }) async {
-    final userId = Supabase.instance.client.auth.currentUser!.id;
+    final current = _profile;
+    if (current == null) {
+      throw const FormatException('Fant ikke profilen din');
+    }
 
-    final updates = {
-      'display_name': _normalizeOptionalText(displayName),
-      'bio': _normalizeOptionalText(bio),
-      'university': _normalizeOptionalText(university),
-      'github_url': _normalizeOptionalText(githubUrl),
-      'study_program': _normalizeOptionalText(studyProgram),
-      'year': year,
-      'linkedin_url': _normalizeOptionalText(linkedinUrl),
-      'website_url': _normalizeOptionalText(websiteUrl),
-      'availability': availabilityOpen,
-    };
-
-    if (updates['display_name'] == null) {
+    final normalizedName = _normalizeOptionalText(displayName);
+    if (normalizedName == null) {
       throw const FormatException('Navn kan ikke være tomt');
     }
 
-    await Supabase.instance.client
-        .from('profiles')
-        .update(updates)
-        .eq('id', userId);
+    final updated = current.copyWith(
+      displayName: normalizedName,
+      bio: _normalizeOptionalText(bio),
+      university: _normalizeOptionalText(university),
+      githubUrl: _normalizeOptionalText(githubUrl),
+      studyProgram: _normalizeOptionalText(studyProgram),
+      year: year,
+      linkedinUrl: _normalizeOptionalText(linkedinUrl),
+      websiteUrl: _normalizeOptionalText(websiteUrl),
+      availability: availabilityOpen,
+    );
+
+    await _profileService.updateProfile(updated);
 
     if (!mounted) {
       return;
     }
 
     setState(() {
-      _profile = {...?_profile, ...updates};
+      _profile = updated;
     });
 
     ScaffoldMessenger.of(
@@ -309,39 +279,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _showEditProfileDialog() async {
     final nameController = TextEditingController(
-      text: _profile?['display_name']?.toString() ?? '',
+      text: _profile?.displayName ?? '',
     );
     final bioController = TextEditingController(
-      text: _profile?['bio']?.toString() ?? '',
+      text: _profile?.bio ?? '',
     );
     final universityController = TextEditingController(
-      text: _profile?['university']?.toString() ?? '',
+      text: _profile?.university ?? '',
     );
     final githubController = TextEditingController(
-      text: _profile?['github_url']?.toString() ?? '',
+      text: _profile?.githubUrl ?? '',
     );
     final studyProgramController = TextEditingController(
-      text: _profile?['study_program']?.toString() ?? '',
+      text: _profile?.studyProgram ?? '',
     );
     final linkedinController = TextEditingController(
-      text: _profile?['linkedin_url']?.toString() ?? '',
+      text: _profile?.linkedinUrl ?? '',
     );
     final websiteController = TextEditingController(
-      text: _profile?['website_url']?.toString() ?? '',
+      text: _profile?.websiteUrl ?? '',
     );
 
     await showDialog<void>(
       context: context,
       builder: (dialogContext) {
         var isSaving = false;
-        final existingYear = _profile?['year'];
-        var selectedYear = existingYear is int
-            ? existingYear
-            : int.tryParse(existingYear?.toString() ?? '');
+        var selectedYear = _profile?.year;
         if (selectedYear != null && (selectedYear < 1 || selectedYear > 5)) {
           selectedYear = null;
         }
-        var availabilityOpen = _availabilityFromProfile(_profile?['availability']);
+        var availabilityOpen = _availabilityFromProfile(_profile?.availability);
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
@@ -396,61 +363,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       items: const [1, 2, 3, 4, 5]
                           .map(
                             (year) => DropdownMenuItem<int>(
-                          value: year,
-                          child: Text('År $year'),
-                        ),
-                      )
-                          .toList(),
-                      onChanged: isSaving
-                          ? null
-                          : (value) {
-                        setDialogState(() {
-                          selectedYear = value;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: _border),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              availabilityOpen ? 'Status: Åpen' : 'Status: Opptatt',
+                              value: year,
+                              child: Text('År $year'),
                             ),
-                          ),
-                          Switch(
-                            value: availabilityOpen,
-                            activeThumbColor: _accent,
-                            onChanged: isSaving
-                                ? null
-                                : (value) {
-                              setDialogState(() {
-                                availabilityOpen = value;
-                              });
-                            },
-                          ),
-                        ],
+                          )
+                          .toList(),
+                      onChanged: (value) => setDialogState(
+                        () => selectedYear = value,
                       ),
                     ),
                     const SizedBox(height: 10),
                     TextField(
                       controller: linkedinController,
-                      decoration: const InputDecoration(
+                      decoration: brutalistInputDecoration(
                         labelText: 'LinkedIn URL',
                       ),
                     ),
                     const SizedBox(height: 10),
                     TextField(
                       controller: websiteController,
-                      decoration: const InputDecoration(
-                        labelText: 'Nettside URL',
+                      decoration: brutalistInputDecoration(
+                        labelText: 'Nettside',
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    SwitchListTile.adaptive(
+                      value: availabilityOpen,
+                      activeTrackColor: _accent,
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Åpen for samarbeid'),
+                      onChanged: (value) => setDialogState(
+                        () => availabilityOpen = value,
                       ),
                     ),
                   ],
@@ -458,64 +401,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               actions: [
                 OutlinedButton(
-                  onPressed: isSaving
-                      ? null
-                      : () => Navigator.pop(dialogContext),
                   style: brutalistOutlineButtonStyle(),
+                  onPressed: () => Navigator.pop(dialogContext),
                   child: const Text('Avbryt'),
                 ),
                 ElevatedButton(
+                  style: brutalistPrimaryButtonStyle(),
                   onPressed: isSaving
                       ? null
                       : () async {
-                    if (nameController.text.trim().isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Navn kan ikke være tomt'),
-                        ),
-                      );
-                      return;
-                    }
-
-                    setDialogState(() {
-                      isSaving = true;
-                    });
-
-                    try {
-                      await _saveProfileEdits(
-                        displayName: nameController.text,
-                        bio: bioController.text,
-                        university: universityController.text,
-                        githubUrl: githubController.text,
-                        studyProgram: studyProgramController.text,
-                        year: selectedYear,
-                        linkedinUrl: linkedinController.text,
-                        websiteUrl: websiteController.text,
-                        availabilityOpen: availabilityOpen,
-                      );
-
-                      if (dialogContext.mounted) {
-                        Navigator.pop(dialogContext);
-                      }
-                    } catch (e) {
-                      if (dialogContext.mounted) {
-                        ScaffoldMessenger.of(dialogContext).showSnackBar(
-                          SnackBar(
-                            content: Text('Kunne ikke lagre profil: $e'),
-                          ),
-                        );
-                        setDialogState(() {
-                          isSaving = false;
-                        });
-                      }
-                    }
-                  },
-                  style: brutalistPrimaryButtonStyle(),
+                          setDialogState(() => isSaving = true);
+                          try {
+                            await _saveProfileEdits(
+                              displayName: nameController.text,
+                              bio: bioController.text,
+                              university: universityController.text,
+                              githubUrl: githubController.text,
+                              studyProgram: studyProgramController.text,
+                              year: selectedYear,
+                              linkedinUrl: linkedinController.text,
+                              websiteUrl: websiteController.text,
+                              availabilityOpen: availabilityOpen,
+                            );
+                            if (!dialogContext.mounted) return;
+                            Navigator.pop(dialogContext);
+                          } catch (e) {
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(e.toString())),
+                            );
+                          } finally {
+                            if (mounted) setDialogState(() => isSaving = false);
+                          }
+                        },
                   child: isSaving
                       ? const SizedBox(
-                    width: 64,
-                    child: LinearProgressIndicator(minHeight: 2),
-                  )
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
                       : const Text('Lagre'),
                 ),
               ],
@@ -528,7 +452,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   /// Logger ut brukeren og sender dem tilbake til velkomstskjermen.
   Future<void> _signOut() async {
-    await Supabase.instance.client.auth.signOut();
+    await _authService.signOut();
     if (!mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
@@ -551,9 +475,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  List<Map<String, dynamic>> get _filteredSkills {
+  List<UserSkill> get _filteredSkills {
     return _skills
-        .where((s) => s['skills']['category'] == _selectedCategory)
+        .where((s) => _normalizeSkillCategory(s.skill?.category) == _selectedCategory)
         .toList();
   }
 
@@ -590,7 +514,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 16),
 
               Text(
-                _availabilityLabel(_profile?['availability']),
+                _availabilityLabel(_profile?.availability),
                 style: TextStyle(
                   color: _accent,
                   fontSize: 12,
@@ -601,7 +525,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
               // Navn
               Text(
-                _profile?['display_name'] ?? 'Ukjent bruker',
+                _profile?.displayName ?? 'Ukjent bruker',
                 style: const TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
@@ -611,11 +535,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 6),
 
               // Bio
-              if (_profile?['bio'] != null)
+              if ((_profile?.bio ?? '').isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Text(
-                    _profile!['bio'],
+                    _profile!.bio!,
                     style: TextStyle(fontSize: 14, color: Colors.grey[500]),
                     textAlign: TextAlign.center,
                     maxLines: 2,
@@ -632,7 +556,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   border: Border.all(color: _accent, width: 1),
                 ),
                 child: Text(
-                  _availabilityFromProfile(_profile?['availability'])
+                  _availabilityFromProfile(_profile?.availability)
                       ? 'ÅPEN FOR SAMARBEID'
                       : 'OPPTATT NÅ',
                   style: TextStyle(
@@ -695,7 +619,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildAvatar() {
-    final url = _profile?['avatar_url'] as String?;
+    final url = _profile?.avatarUrl;
     final hasImage = url != null && url.isNotEmpty;
 
     return GestureDetector(
@@ -768,7 +692,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Icon(Icons.school, size: 18, color: Colors.grey[400]),
               const SizedBox(width: 10),
               Text(
-                _profile?['university'] ?? 'Ikke angitt',
+                _profile?.university ?? 'Ikke angitt',
                 style: const TextStyle(color: Colors.white, fontSize: 14),
               ),
             ]),
@@ -793,11 +717,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          _linkIcon(Icons.code, _profile?['github_url']),
+          _linkIcon(Icons.code, _profile?.githubUrl),
           const SizedBox(width: 16),
-          _linkIcon(Icons.business, _profile?['linkedin_url']),
+          _linkIcon(Icons.business, _profile?.linkedinUrl),
           const SizedBox(width: 16),
-          _linkIcon(Icons.language, _profile?['website_url']),
+          _linkIcon(Icons.language, _profile?.websiteUrl),
         ],
       ),
     );
@@ -888,7 +812,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             spacing: 8,
             runSpacing: 8,
             children: _filteredSkills.map((s) {
-              final color = _proficiencyColor(s['proficiency']);
+              final color = _proficiencyColor(s.proficiency);
+              final skillName = s.skill?.name ?? 'Ukjent';
               return Container(
                 padding:
                 const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -901,7 +826,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      s['skills']['name'],
+                      skillName,
                       style:
                       const TextStyle(color: Colors.white, fontSize: 14),
                     ),
@@ -953,7 +878,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               _statCard('$_memberProjectsCount', 'PROSJEKTER\nDELTATT', _accent),
               const SizedBox(width: 10),
               _statCard(
-                _formatDate(_profile?['created_at']),
+                _formatDate(_profile?.createdAt),
                 'MEDLEM\nSIDEN',
                 _accent,
               ),
@@ -990,9 +915,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  String _formatDate(String? dateStr) {
-    if (dateStr == null) return '?';
-    final date = DateTime.tryParse(dateStr);
+  String _formatDate(DateTime? date) {
     if (date == null) return '?';
     const months = [
       'Jan', 'Feb', 'Mar', 'Apr', 'Mai', 'Jun',
@@ -1007,13 +930,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   String _studyProgramAndYear() {
-    final program = _displayValue(_profile?['study_program']);
-    final year = _displayValue(_profile?['year']);
+    final program = _displayValue(_profile?.studyProgram);
+    final year = _profile?.year;
 
-    if (program == 'Ikke angitt' && year == 'Ikke angitt') {
+    if (program == 'Ikke angitt' && year == null) {
       return 'Ikke angitt';
     }
-    if (year == 'Ikke angitt') {
+    if (year == null) {
       return program;
     }
     if (program == 'Ikke angitt') {
@@ -1030,25 +953,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return text;
   }
 
-  bool _availabilityFromProfile(dynamic value) {
-    if (value is bool) {
-      return value;
-    }
-
-    final text = value?.toString().trim().toLowerCase();
-    if (text == null || text.isEmpty) {
-      return true;
-    }
-
-    return text == 'open' ||
-        text == 'available' ||
-        text == 'apen' ||
-        text == 'åpen' ||
-        text == 'true' ||
-        text == '1';
+  bool _availabilityFromProfile(bool? value) {
+    return value ?? true;
   }
 
-  String _availabilityLabel(dynamic value) {
+  String _availabilityLabel(bool? value) {
     return _availabilityFromProfile(value) ? 'STATUS: ÅPEN' : 'STATUS: OPPTATT';
   }
+
+  String _normalizeSkillCategory(String? rawValue) {
+    final raw = rawValue?.toLowerCase().trim() ?? '';
+    switch (raw) {
+      case 'language':
+      case 'languages':
+        return 'language';
+      case 'frontend':
+      case 'front_end':
+      case 'front-end':
+        return 'frontend';
+      case 'backend':
+      case 'back_end':
+      case 'back-end':
+        return 'backend';
+      case 'data_ai':
+      case 'dataai':
+      case 'data':
+      case 'ai':
+        return 'data_ai';
+      case 'devops':
+        return 'devops';
+      case 'database':
+      case 'databases':
+      case 'db':
+        return 'database';
+      case 'design':
+      case 'ui':
+      case 'ux':
+        return 'design';
+      case 'mobile':
+        return 'mobile';
+      default:
+        return raw;
+    }
+  }
 }
+
+
+

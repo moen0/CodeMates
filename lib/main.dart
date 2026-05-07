@@ -1,5 +1,6 @@
 import 'package:devconnect/screens/welcome.dart';
 import 'package:devconnect/screens/home_screen.dart';
+import 'package:devconnect/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -21,8 +22,9 @@ class AuthGate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final authService = AuthService();
     return StreamBuilder<AuthState>(
-      stream: Supabase.instance.client.auth.onAuthStateChange,
+      stream: authService.authStateChanges,
       builder: (context, snapshot) {
         // Venter på første auth-event (inkludert gjenopprettet sesjon)
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -31,8 +33,7 @@ class AuthGate extends StatelessWidget {
             body: Center(child: CircularProgressIndicator()),
           );
         }
-        final session = snapshot.data?.session;
-        if (session != null) {
+        if (authService.isLoggedIn) {
           return const HomeScreen();
         }
         return const Welcome();

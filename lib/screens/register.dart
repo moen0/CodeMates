@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:devconnect/widgets/brutalist_ui.dart';
 import 'package:devconnect/screens/edit_profile_screen.dart';
 import 'package:devconnect/screens/login.dart';
+import 'package:devconnect/services/auth_service.dart';
 
 class Register extends StatefulWidget {
   const Register({super.key});
@@ -18,6 +19,7 @@ class _RegisterScreenState extends State<Register> {
   final passwordController = TextEditingController();
   final confirmPasswordController = TextEditingController();
   bool isLoading = false;
+  final _authService = AuthService();
 
   @override
   void dispose() {
@@ -55,14 +57,13 @@ class _RegisterScreenState extends State<Register> {
     final displayName = displayNameController.text.trim();
 
     try {
-      final authResponse = await Supabase.instance.client.auth.signUp(
+      final profile = await _authService.signUp(
         email: email,
         password: passwordController.text,
+        displayName: displayName,
       );
 
-      final session =
-          authResponse.session ?? Supabase.instance.client.auth.currentSession;
-      if (session == null) {
+      if (profile == null) {
         if (!mounted) {
           return;
         }
@@ -78,19 +79,6 @@ class _RegisterScreenState extends State<Register> {
         return;
       }
 
-      final userId = authResponse.user?.id ?? Supabase.instance.client.auth.currentUser?.id;
-      if (userId == null) {
-        throw const AuthException(
-          'Konto opprettet, men fant ikke bruker-id. Prøv å logge inn igjen.',
-        );
-      }
-
-      await Supabase.instance.client.from('profiles').upsert({
-        'id': userId,
-        'display_name': displayName,
-        'email': email,
-      });
-
       if (!mounted) {
         return;
       }
@@ -102,16 +90,16 @@ class _RegisterScreenState extends State<Register> {
         context,
         MaterialPageRoute(builder: (_) => const EditProfileScreen()),
       );
-    } on AuthException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
-      }
-    } on PostgrestException catch (e) {
+    } on AuthException {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Kunne ikke oppdatere profil: ${e.message}')),
+          const SnackBar(content: Text('Kunne ikke opprette bruker. Prøv igjen.')),
+        );
+      }
+    } on PostgrestException {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Kunne ikke oppdatere profil. Prøv igjen.')),
         );
       }
     } finally {

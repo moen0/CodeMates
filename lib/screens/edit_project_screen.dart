@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:devconnect/widgets/brutalist_ui.dart';
 import '../services/project_service.dart';
+import 'package:devconnect/models/project.dart';
 
 class EditProjectScreen extends StatefulWidget {
   final Map<String, dynamic> project;
@@ -18,13 +18,15 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
   late final TextEditingController _meetingLinkController;
   final _service = ProjectService();
   bool _isSaving = false;
+  late final Project _project;
 
   @override
   void initState() {
     super.initState();
-    _titleController = TextEditingController(text: widget.project['title'] ?? '');
-    _descriptionController = TextEditingController(text: widget.project['description'] ?? '');
-    _meetingLinkController = TextEditingController(text: widget.project['meeting_link'] ?? '');
+    _project = Project.fromMap(widget.project);
+    _titleController = TextEditingController(text: _project.title);
+    _descriptionController = TextEditingController(text: _project.description);
+    _meetingLinkController = TextEditingController(text: _project.meetingLink ?? '');
   }
 
   @override
@@ -40,7 +42,7 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
     setState(() => _isSaving = true);
     try {
       await _service.updateProject(
-        projectId: widget.project['id'],
+        projectId: _project.id,
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
         meetingLink: _meetingLinkController.text.trim(),
@@ -89,10 +91,7 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
 
     setState(() => _isSaving = true);
     try {
-      await Supabase.instance.client
-          .from('projects')
-          .delete()
-          .eq('id', widget.project['id']);
+      await _service.deleteProject(_project.id);
       if (!mounted) return;
       // Pop both edit screen and detail screen
       Navigator.pop(context, 'deleted');

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:devconnect/services/matching_service.dart';
+import 'package:devconnect/services/auth_service.dart';
+import 'package:devconnect/services/project_service.dart';
+import 'package:devconnect/models/project.dart';
+import 'package:devconnect/models/skill.dart';
 import 'project_detail_screen.dart';
 import 'create_project_screen.dart';
 import 'public_profile_screen.dart';
@@ -18,13 +21,16 @@ class FeedScreen extends StatefulWidget {
 class _FeedScreenState extends State<FeedScreen> {
   final MatchingService _matchingService = MatchingService();
   final TextEditingController _searchController = TextEditingController();
+  final AuthService _authService = AuthService();
+  final ProjectService _projectService = ProjectService();
 
-  List<Map<String, dynamic>> projects = [];
-  Map<String, List<Map<String, dynamic>>> _projectSkills = {};
+  List<Project> projects = [];
+  Map<String, List<Skill>> _projectSkills = {};
+  Map<String, int> _matchScores = {};
   bool isLoading = true;
   bool showNoSkillsHint = false;
   String _searchQuery = '';
-  int? _selectedSkillId;
+  String? _selectedSkillId;
   String _selectedFilterLabel = 'ALL';
   String _sortMode = 'match';
 
@@ -44,124 +50,73 @@ class _FeedScreenState extends State<FeedScreen> {
     super.dispose();
   }
 
-  List<Map<String, dynamic>> _applyFilters(
-    List<Map<String, dynamic>> source,
+  List<Project> _applyFilters(
+    List<Project> source,
   ) {
     final query = _searchQuery.trim().toLowerCase();
     return source.where((project) {
       if (!_matchesFilter(project)) return false;
       if (query.isEmpty) return true;
 
-      final title = (project['title'] ?? '').toString().toLowerCase();
-      final description =
-          (project['description'] ?? '').toString().toLowerCase();
+      final title = project.title.toLowerCase();
+      final description = project.description.toLowerCase();
       return title.contains(query) || description.contains(query);
     }).toList();
   }
 
-  bool _matchesFilter(Map<String, dynamic> project) {
+  bool _matchesFilter(Project project) {
     if (_selectedSkillId == null) return true;
-    final projectId = project['id']?.toString();
-    if (projectId == null) return false;
-    final skills = _projectSkills[projectId] ?? const <Map<String, dynamic>>[];
-    return skills.any((skill) => skill['id'] == _selectedSkillId);
+    final projectId = project.id;
+    final skills = _projectSkills[projectId] ?? const <Skill>[];
+    return skills.any((skill) => skill.id == _selectedSkillId);
   }
 
-  void _sortProjects(List<Map<String, dynamic>> source, bool hasUser) {
+  void _sortProjects(List<Project> source, bool hasUser) {
     source.sort((a, b) {
       if (hasUser && _sortMode == 'match') {
-        final scoreA = (a['_matchScore'] as int?) ?? 0;
-        final scoreB = (b['_matchScore'] as int?) ?? 0;
+        final scoreA = _matchScores[a.id] ?? 0;
+        final scoreB = _matchScores[b.id] ?? 0;
         if (scoreA != scoreB) {
           return scoreB.compareTo(scoreA);
         }
       }
 
-      final createdA =
-          DateTime.tryParse(a['created_at']?.toString() ?? '') ??
-          DateTime.fromMillisecondsSinceEpoch(0);
-      final createdB =
-          DateTime.tryParse(b['created_at']?.toString() ?? '') ??
-          DateTime.fromMillisecondsSinceEpoch(0);
-      return createdB.compareTo(createdA);
+      return b.createdAt.compareTo(a.createdAt);
     });
   }
 
   Future<void> loadProjects() async {
     try {
-      final currentUser = Supabase.instance.client.auth.currentUser;
+      final currentUserId = _authService.currentUserId;
 
-      var projectsQuery = Supabase.instance.client
-          .from('projects')
-          .select('*, profiles:owner_id(display_name, email)')
-          .eq('status', 'recruiting');
+      final loadedProjects = await _projectService.getRecruitingProjects(
+        excludeOwnerId: currentUserId,
+      );
 
-      if (currentUser != null) {
-        projectsQuery = projectsQuery.neq('owner_id', currentUser.id);
-      }
+      final projectIds = loadedProjects.map((project) => project.id).toList();
+      final projectSkills =
+          await _projectService.getProjectSkillsForProjects(projectIds);
 
-      final response = await projectsQuery.order('created_at', ascending: false);
-
-      final loadedProjects = List<Map<String, dynamic>>.from(response);
-      final projectIds = loadedProjects
-          .map((project) => project['id']?.toString())
-          .whereType<String>()
-          .toList();
-
-      final projectSkills = <String, List<Map<String, dynamic>>>{};
-      final skillLookup = <int, String>{};
-
-      if (projectIds.isNotEmpty) {
-        final skillRows = await Supabase.instance.client
-            .from('project_skills')
-            .select('project_id, skills(id, name)')
-            .inFilter('project_id', projectIds);
-
-        for (final row in skillRows) {
-          final map = Map<String, dynamic>.from(row);
-          final projectId = map['project_id']?.toString();
-          final skill = map['skills'] as Map<String, dynamic>?;
-          final skillId = skill?['id'] as int?;
-          final skillName = skill?['name']?.toString();
-          if (projectId == null || skillId == null || skillName == null) {
-            continue;
-          }
-
-          projectSkills.putIfAbsent(projectId, () => <Map<String, dynamic>>[]);
-          projectSkills[projectId]!.add({
-            'id': skillId,
-            'name': skillName,
-          });
-          skillLookup[skillId] = skillName;
+      final skillLookup = <String, String>{};
+      for (final skills in projectSkills.values) {
+        for (final skill in skills) {
+          skillLookup[skill.id] = skill.name;
         }
       }
 
-      Map<String, int> matchesByProject = const <String, int>{};
       var shouldShowNoSkillsHint = false;
+      final matchScores = <String, int>{};
 
-      if (currentUser != null && projectIds.isNotEmpty) {
+      if (currentUserId != null) {
         final matchResult = await _matchingService.calculateMatchesForUser(
-          currentUser.id,
+          currentUserId,
           projectIds,
         );
-        matchesByProject = matchResult.scores;
-        shouldShowNoSkillsHint = !matchResult.userHasSkills;
-      } else if (currentUser != null) {
-        final matchResult = await _matchingService.calculateMatchesForUser(
-          currentUser.id,
-          const <String>[],
-        );
+        matchScores.addAll(matchResult.scores);
         shouldShowNoSkillsHint = !matchResult.userHasSkills;
       }
 
-      for (final project in loadedProjects) {
-        final projectId = project['id']?.toString();
-        project['_matchScore'] = currentUser == null
-            ? null
-            : (projectId == null ? 0 : (matchesByProject[projectId] ?? 0));
-      }
-
-      _sortProjects(loadedProjects, currentUser != null);
+      _sortProjects(loadedProjects, currentUserId != null);
 
       final filterOptions = <_FeedFilter>[const _FeedFilter(label: 'ALL')];
       final sortedSkills = skillLookup.entries.toList()
@@ -186,6 +141,7 @@ class _FeedScreenState extends State<FeedScreen> {
         setState(() {
           projects = loadedProjects;
           _projectSkills = projectSkills;
+          _matchScores = matchScores;
           _filters = filterOptions;
           _selectedSkillId = selectedSkillId;
           _selectedFilterLabel = selectedFilterLabel;
@@ -207,7 +163,7 @@ class _FeedScreenState extends State<FeedScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final currentUser = Supabase.instance.client.auth.currentUser;
+    final hasUser = _authService.isLoggedIn;
     final filteredProjects = _applyFilters(projects);
     final hasResults = filteredProjects.isNotEmpty;
 
@@ -238,7 +194,7 @@ class _FeedScreenState extends State<FeedScreen> {
                 itemBuilder: (context, index) {
                   if (index == 0) {
                     return _buildFeedHeader(
-                      currentUser != null,
+                      hasUser,
                       filteredProjects.length,
                     );
                   }
@@ -255,16 +211,12 @@ class _FeedScreenState extends State<FeedScreen> {
                     return _buildNoSkillsHint();
                   }
 
-                  final project = filteredProjects[
-                      index - (showNoSkillsHint ? 2 : 1)
-                  ];
-                  final owner = project['profiles'];
-                  final matchScore = project['_matchScore'] as int?;
-                  final projectId = project['id']?.toString();
-                  final skills = projectId == null
-                      ? const <Map<String, dynamic>>[]
-                      : (_projectSkills[projectId] ??
-                          const <Map<String, dynamic>>[]);
+                  final project =
+                      filteredProjects[index - (showNoSkillsHint ? 2 : 1)];
+                  final owner = project.owner;
+                  final matchScore =
+                      hasUser ? _matchScores[project.id] : null;
+                  final skills = _projectSkills[project.id] ?? const <Skill>[];
 
                   return Card(
                     margin: const EdgeInsets.symmetric(
@@ -281,7 +233,7 @@ class _FeedScreenState extends State<FeedScreen> {
                         children: [
                           Expanded(
                             child: Text(
-                              project['title'] ?? '',
+                              project.title,
                               style: const TextStyle(fontWeight: FontWeight.bold),
                             ),
                           ),
@@ -311,7 +263,7 @@ class _FeedScreenState extends State<FeedScreen> {
                         children: [
                           const SizedBox(height: 4),
                           Text(
-                            project['description'] ?? '',
+                            project.description,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -321,8 +273,7 @@ class _FeedScreenState extends State<FeedScreen> {
                               spacing: 8,
                               runSpacing: 8,
                               children: skills.take(4).map((skill) {
-                                final name =
-                                    skill['name']?.toString().toUpperCase() ?? '';
+                                final name = skill.name.toUpperCase();
                                 return Container(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 10,
@@ -349,8 +300,8 @@ class _FeedScreenState extends State<FeedScreen> {
                           const SizedBox(height: 4),
                           GestureDetector(
                             onTap: () {
-                              final ownerId = project['owner_id'] as String?;
-                              if (ownerId == null) return;
+                              final ownerId = project.ownerId;
+                              if (ownerId.isEmpty) return;
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
@@ -359,7 +310,7 @@ class _FeedScreenState extends State<FeedScreen> {
                               );
                             },
                             child: Text(
-                              'Av ${owner?['display_name'] ?? owner?['email'] ?? 'Ukjent'}',
+                              'Av ${owner?.displayLabel ?? 'Ukjent'}',
                               style: const TextStyle(
                                 fontSize: 12,
                                 color: BrutalistPalette.accent,
@@ -375,7 +326,9 @@ class _FeedScreenState extends State<FeedScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => ProjectDetailScreen(project: project),
+                            builder: (_) => ProjectDetailScreen(
+                              project: _projectToMap(project),
+                            ),
                           ),
                         );
                       },
@@ -385,6 +338,28 @@ class _FeedScreenState extends State<FeedScreen> {
               ),
             ),
     );
+  }
+
+  Map<String, dynamic> _projectToMap(Project project) {
+    return {
+      'id': project.id,
+      'owner_id': project.ownerId,
+      'title': project.title,
+      'description': project.description,
+      'status': project.status,
+      'created_at': project.createdAt.toIso8601String(),
+      'updated_at': project.updatedAt?.toIso8601String(),
+      'max_members': project.maxMembers,
+      'meeting_link': project.meetingLink,
+      'project_type': project.projectType,
+      'goal': project.goal,
+      'profiles': project.owner == null
+          ? null
+          : {
+              'display_name': project.owner!.displayName,
+              'email': project.owner!.email,
+            },
+    };
   }
 
   Widget _buildNoSkillsHint() {
@@ -601,8 +576,7 @@ class _FeedScreenState extends State<FeedScreen> {
               if (_sortMode == value) return;
               setState(() {
                 _sortMode = value;
-                final hasUser =
-                    Supabase.instance.client.auth.currentUser != null;
+                final hasUser = _authService.isLoggedIn;
                 _sortProjects(projects, hasUser);
               });
             },
@@ -659,7 +633,7 @@ class _FeedScreenState extends State<FeedScreen> {
 
 class _FeedFilter {
   final String label;
-  final int? skillId;
+  final String? skillId;
 
   const _FeedFilter({required this.label, this.skillId});
 }

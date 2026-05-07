@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'home_screen.dart';
 import 'package:devconnect/widgets/brutalist_ui.dart';
+import 'package:devconnect/services/auth_service.dart';
+import 'package:devconnect/services/profile_service.dart';
+import 'package:devconnect/models/profile.dart';
+import 'package:devconnect/models/skill.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -20,7 +23,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _linkedinController = TextEditingController();
   final _websiteController = TextEditingController();
 
-  final Map<int, _SelectedSkill> _selectedSkills = {};
+  final _authService = AuthService();
+  final _profileService = ProfileService();
+
+  final Map<String, _SelectedSkill> _selectedSkills = {};
 
   int _step = 0;
   bool _isLoadingSkills = true;
@@ -29,7 +35,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   int? _selectedYear;
   String _activeCategory = 'language';
 
-  List<Map<String, dynamic>> _allSkills = [];
+  List<Skill> _allSkills = [];
 
   static const _skillCategories = <_SkillCategory>[
     _SkillCategory(key: 'language', label: 'SPRÅK'),
@@ -45,8 +51,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   @override
   void initState() {
     super.initState();
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) {
+    final userId = _authService.currentUserId;
+    if (userId == null) {
       return;
     }
     _loadSkills();
@@ -71,17 +77,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _loadSkills() async {
     try {
-      final response = await Supabase.instance.client
-          .from('skills')
-          .select('id, name, category')
-          .order('name');
+      final response = await _profileService.getAllSkills();
 
       if (!mounted) {
         return;
       }
 
       setState(() {
-        _allSkills = List<Map<String, dynamic>>.from(response);
+        _allSkills = response;
         _isLoadingSkills = false;
       });
     } catch (e) {
@@ -97,9 +100,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
-  List<Map<String, dynamic>> _skillsForActiveCategory() {
+  List<Skill> _skillsForActiveCategory() {
     return _allSkills.where((skill) {
-      final raw = (skill['category']?.toString() ?? '').toLowerCase().trim();
+      final raw = (skill.category ?? '').toLowerCase().trim();
       return _normaliseCategory(raw) == _activeCategory;
     }).toList();
   }
@@ -173,8 +176,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  Future<void> _toggleSkill(Map<String, dynamic> skill) async {
-    final skillId = skill['id'] as int;
+  Future<void> _toggleSkill(Skill skill) async {
+    final skillId = skill.id;
 
     if (_selectedSkills.containsKey(skillId)) {
       setState(() {
@@ -198,8 +201,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<void> _saveProfile() async {
-    final currentUser = Supabase.instance.client.auth.currentUser;
-    if (currentUser == null) {
+    final currentUserId = _authService.currentUserId;
+    final currentUserEmail = _authService.currentUserEmail;
+    if (currentUserId == null || currentUserEmail == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Du må være logget inn for å fullføre profil')),
       );
@@ -210,41 +214,34 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _isSaving = true;
     });
 
-    final updates = {
-      'display_name': _normalise(_displayNameController.text),
-      'bio': _normalise(_bioController.text),
-      'email': currentUser.email,
-      'university': _normalise(_universityController.text),
-      'study_program': _normalise(_studyProgramController.text),
-      'year': _selectedYear,
-      'github_url': _normalise(_githubController.text),
-      'linkedin_url': _normalise(_linkedinController.text),
-      'website_url': _normalise(_websiteController.text),
-      'availability': _isOpenForCollaboration,
-    };
+    final updates = Profile(
+      id: currentUserId,
+      displayName: _normalise(_displayNameController.text) ?? '',
+      email: currentUserEmail,
+      bio: _normalise(_bioController.text),
+      university: _normalise(_universityController.text),
+      studyProgram: _normalise(_studyProgramController.text),
+      year: _selectedYear,
+      githubUrl: _normalise(_githubController.text),
+      linkedinUrl: _normalise(_linkedinController.text),
+      websiteUrl: _normalise(_websiteController.text),
+      availability: _isOpenForCollaboration,
+    );
 
     try {
-      await Supabase.instance.client.from('profiles').upsert({
-        'id': currentUser.id,
-        ...updates,
-      });
+      await _profileService.updateProfile(updates);
 
-      await Supabase.instance.client
-          .from('user_skills')
-          .delete()
-          .eq('user_id', currentUser.id);
+      await _profileService.clearUserSkills(currentUserId);
 
       if (_selectedSkills.isNotEmpty) {
-        await Supabase.instance.client.from('user_skills').insert(
-          _selectedSkills.values
-              .map(
-                (selected) => {
-                  'user_id': currentUser.id,
-                  'skill_id': selected.skill['id'],
-                  'proficiency': selected.proficiency,
-                },
-              )
-              .toList(),
+        await Future.wait(
+          _selectedSkills.values.map(
+            (selected) => _profileService.addUserSkill(
+              userId: currentUserId,
+              skillId: selected.skill.id,
+              proficiency: selected.proficiency,
+            ),
+          ),
         );
       }
 
@@ -535,13 +532,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        '${selected.skill['name']} (${_proficiencyLabel(selected.proficiency)})',
+                        '${selected.skill.name} (${_proficiencyLabel(selected.proficiency)})',
                       ),
                       const SizedBox(width: 8),
                       GestureDetector(
                         onTap: () {
                           setState(() {
-                            _selectedSkills.remove(selected.skill['id'] as int);
+                            _selectedSkills.remove(selected.skill.id);
                           });
                         },
                         child: const Icon(Icons.close, size: 16),
@@ -585,7 +582,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               spacing: 8,
               runSpacing: 8,
               children: skillsInCategory.map((skill) {
-                final skillId = skill['id'] as int;
+                final skillId = skill.id;
                 final selected = _selectedSkills.containsKey(skillId);
                 return GestureDetector(
                   onTap: () => _toggleSkill(skill),
@@ -601,7 +598,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             : BrutalistPalette.border,
                       ),
                     ),
-                    child: Text(skill['name'].toString()),
+                    child: Text(skill.name),
                   ),
                 );
               }).toList(),
@@ -735,8 +732,7 @@ class _SkillCategory {
 class _SelectedSkill {
   const _SelectedSkill({required this.skill, required this.proficiency});
 
-  final Map<String, dynamic> skill;
+  final Skill skill;
   final String proficiency;
 }
-
 

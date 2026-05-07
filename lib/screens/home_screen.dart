@@ -17,7 +17,6 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late int currentIndex;
   int _profileRefreshToken = 0;
-  int _myProjectsRefreshToken = 0;
 
   @override
   void initState() {
@@ -36,7 +35,7 @@ class _HomeScreenState extends State<HomeScreen> {
           });
         },
       ),
-      MyProjectsScreen(refreshToken: _myProjectsRefreshToken),
+      const MyProjectsScreen(),
       const ApplicationsScreen(),
       ProfileScreen(refreshToken: _profileRefreshToken),
     ];
@@ -63,9 +62,6 @@ class _HomeScreenState extends State<HomeScreen> {
             currentIndex = index;
             if (index == 3) {
               _profileRefreshToken++;
-            }
-            if (index == 1) {
-              _myProjectsRefreshToken++;
             }
           });
         },

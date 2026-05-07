@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/message.dart';
+import '../services/auth_service.dart';
+import '../services/message_service.dart';
 import 'public_profile_screen.dart';
 
 class ProjectChatScreen extends StatefulWidget {
@@ -18,9 +22,14 @@ class ProjectChatScreen extends StatefulWidget {
 
 class _ProjectChatScreenState extends State<ProjectChatScreen> {
   final _messageController = TextEditingController();
-  final _supabase = Supabase.instance.client;
+  final _scrollController = ScrollController();
+  final _messageService = MessageService();
+  final _authService = AuthService();
 
-  late final Stream<List<Map<String, dynamic>>> _messagesStream;
+  StreamSubscription<Message>? _messagesSubscription;
+  List<Message> _messages = [];
+  bool _isLoading = true;
+  String? _errorText;
 
   // Cache of sender info: senderId -> { name, avatar_url }
   Map<String, Map<String, String?>> _senderInfo = {};
@@ -28,54 +37,75 @@ class _ProjectChatScreenState extends State<ProjectChatScreen> {
   @override
   void initState() {
     super.initState();
-    _messagesStream = _supabase
-        .from('messages')
-        .stream(primaryKey: ['id'])
-        .eq('project_id', widget.projectId)
-        .order('created_at', ascending: false);
-
-    _loadSenderInfo();
+    _loadMessages();
+    _messagesSubscription = _messageService
+        .subscribeToMessages(widget.projectId)
+        .listen(_handleIncomingMessage, onError: (_) {
+      if (mounted) {
+        setState(() => _errorText = 'Noe gikk galt');
+      }
+    });
   }
 
-  Future<void> _loadSenderInfo() async {
+  Future<void> _loadMessages() async {
     try {
-      final messages = await _supabase
-          .from('messages')
-          .select('sender_id')
-          .eq('project_id', widget.projectId);
-
-      final senderIds = messages
-          .map((m) => m['sender_id'] as String)
-          .toSet()
-          .toList();
-
-      // Always include the current user so own bubbles can show avatar fallback
-      final currentUserId = _supabase.auth.currentUser?.id;
-      if (currentUserId != null && !senderIds.contains(currentUserId)) {
-        senderIds.add(currentUserId);
-      }
-
-      if (senderIds.isEmpty) return;
-
-      final profiles = await _supabase
-          .from('profiles')
-          .select('id, display_name, email, avatar_url')
-          .inFilter('id', senderIds);
-
-      final map = <String, Map<String, String?>>{};
-      for (final p in profiles) {
-        map[p['id'] as String] = {
-          'name': (p['display_name'] as String?) ??
-              (p['email'] as String?) ??
-              'Ukjent',
-          'avatar_url': p['avatar_url'] as String?,
-        };
-      }
-
-      if (mounted) setState(() => _senderInfo = map);
+      final messages = await _messageService.getMessages(widget.projectId);
+      if (!mounted) return;
+      setState(() {
+        _messages = messages;
+        _isLoading = false;
+        _errorText = null;
+      });
+      _updateSenderInfo(messages);
+      _scrollToBottom(jump: true);
     } catch (_) {
-      // silent fail; bubbles will fall back to "Ukjent"
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorText = 'Noe gikk galt';
+      });
     }
+  }
+
+  void _updateSenderInfo(Iterable<Message> messages) {
+    final updated = Map<String, Map<String, String?>>.from(_senderInfo);
+    for (final message in messages) {
+      final sender = message.sender;
+      if (sender == null) continue;
+      updated[message.senderId] = {
+        'name': sender.displayLabel,
+        'avatar_url': sender.avatarUrl,
+      };
+    }
+    if (mounted) setState(() => _senderInfo = updated);
+  }
+
+  void _handleIncomingMessage(Message message) {
+    if (!mounted) return;
+    final exists = _messages.any((m) => m.id == message.id);
+    if (exists) return;
+
+    setState(() {
+      _messages.insert(0, message);
+    });
+    _updateSenderInfo([message]);
+    _scrollToBottom();
+  }
+
+  void _scrollToBottom({bool jump = false}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      final target = _scrollController.position.minScrollExtent;
+      if (jump) {
+        _scrollController.jumpTo(target);
+      } else {
+        _scrollController.animateTo(
+          target,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+        );
+      }
+    });
   }
 
   Future<void> _sendMessage() async {
@@ -85,13 +115,12 @@ class _ProjectChatScreenState extends State<ProjectChatScreen> {
     _messageController.clear();
 
     try {
-      await _supabase.from('messages').insert({
-        'project_id': widget.projectId,
-        'sender_id': _supabase.auth.currentUser!.id,
-        'content': content,
-      });
-      _loadSenderInfo();
-    } catch (e) {
+      final message = await _messageService.sendMessage(
+        projectId: widget.projectId,
+        content: content,
+      );
+      _handleIncomingMessage(message);
+    } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Kunne ikke sende melding')),
@@ -102,13 +131,16 @@ class _ProjectChatScreenState extends State<ProjectChatScreen> {
 
   @override
   void dispose() {
+    _messagesSubscription?.cancel();
+    _messageService.unsubscribe(widget.projectId);
     _messageController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final currentUserId = _supabase.auth.currentUser!.id;
+    final currentUserId = _authService.currentUserId!;
 
     return Scaffold(
       appBar: AppBar(
@@ -117,60 +149,62 @@ class _ProjectChatScreenState extends State<ProjectChatScreen> {
       body: Column(
         children: [
           Expanded(
-            child: StreamBuilder<List<Map<String, dynamic>>>(
-              stream: _messagesStream,
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return const Center(child: Text('Noe gikk galt'));
+            child: Builder(
+              builder: (context) {
+                if (_errorText != null) {
+                  return Center(child: Text(_errorText!));
                 }
-                if (!snapshot.hasData) {
+                if (_isLoading) {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                final messages = snapshot.data!;
-
-                if (messages.isEmpty) {
+                if (_messages.isEmpty) {
                   return const Center(
                     child: Text('Ingen meldinger ennå. Si hei!'),
                   );
                 }
 
                 return ListView.builder(
+                  controller: _scrollController,
                   reverse: true,
                   padding: const EdgeInsets.symmetric(vertical: 8),
-                  itemCount: messages.length,
+                  itemCount: _messages.length,
                   itemBuilder: (context, index) {
-                    final msg = messages[index];
-                    final senderId = msg['sender_id'] as String;
+                    final msg = _messages[index];
+                    final senderId = msg.senderId;
                     final isMe = senderId == currentUserId;
 
                     // Group consecutive messages from the same sender.
                     // In a reversed list, the "next" message visually below
                     // is at index+1 in the data array.
                     final prevMsg =
-                    index + 1 < messages.length ? messages[index + 1] : null;
+                        index + 1 < _messages.length ? _messages[index + 1] : null;
                     final isFirstInGroup =
-                        prevMsg == null || prevMsg['sender_id'] != senderId;
+                        prevMsg == null || prevMsg.senderId != senderId;
 
                     final info = _senderInfo[senderId];
-                    final senderName = info?['name'] ?? 'Ukjent';
-                    final avatarUrl = info?['avatar_url'];
+                    final senderName =
+                        msg.sender?.displayLabel ?? info?['name'] ?? 'Ukjent';
+                    final avatarUrl =
+                        msg.sender?.avatarUrl ?? info?['avatar_url'];
 
                     return _MessageBubble(
-                      content: msg['content'] as String,
+                      content: msg.content,
                       isMe: isMe,
                       senderId: senderId,
                       senderName: senderName,
                       avatarUrl: avatarUrl,
-                      timestamp:
-                      DateTime.parse(msg['created_at'] as String).toLocal(),
+                      timestamp: msg.createdAt.toLocal(),
                       showHeader: isFirstInGroup,
-                      onAvatarTap: isMe ? null : () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => PublicProfileScreen(userId: senderId),
-                        ),
-                      ),
+                      onAvatarTap: isMe
+                          ? null
+                          : () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      PublicProfileScreen(userId: senderId),
+                                ),
+                              ),
                     );
                   },
                 );
@@ -261,11 +295,11 @@ class _MessageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final bubbleColor =
-    isMe ? theme.colorScheme.primary : theme.colorScheme.surfaceContainerHighest;
+        isMe ? theme.colorScheme.primary : theme.colorScheme.surfaceContainerHighest;
     final textColor = isMe
         ? theme.colorScheme.onPrimary
         : theme.colorScheme.onSurfaceVariant;
-    final mutedColor = textColor.withOpacity(0.7);
+    final mutedColor = textColor.withValues(alpha: 0.7);
 
     final avatar = SizedBox(
       width: 32,
@@ -343,27 +377,27 @@ class _MessageBubble extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Row(
         mainAxisAlignment:
-        isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: isMe
             ? [
-          ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width * 0.75,
-            ),
-            child: bubble,
-          ),
-        ]
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width * 0.75,
+                  ),
+                  child: bubble,
+                ),
+              ]
             : [
-          avatar,
-          const SizedBox(width: 6),
-          ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width * 0.75,
-            ),
-            child: bubble,
-          ),
-        ],
+                avatar,
+                const SizedBox(width: 6),
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width * 0.75,
+                  ),
+                  child: bubble,
+                ),
+              ],
       ),
     );
   }

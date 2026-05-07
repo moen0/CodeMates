@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:devconnect/services/project_service.dart';
+import 'package:devconnect/models/skill.dart';
 
 class CreateProjectStep2Screen extends StatefulWidget {
   const CreateProjectStep2Screen({
@@ -39,7 +40,7 @@ class _CreateProjectStep2ScreenState extends State<CreateProjectStep2Screen>
   String? selectedTimeframe;
   final customMonthsController = TextEditingController();
 
-  List<Map<String, dynamic>> allSkills = [];
+  List<Skill> allSkills = [];
   List<int> selectedSkillIds = [];
 
   final List<_SkillCategoryOption> skillCategories = const [
@@ -213,19 +214,22 @@ class _CreateProjectStep2ScreenState extends State<CreateProjectStep2Screen>
 
     final filteredSkills = normalizedQuery.isNotEmpty
         ? allSkills.where((skill) {
-            final name = (skill['name']?.toString() ?? '').toLowerCase();
+            final name = skill.name.toLowerCase();
             return name.contains(normalizedQuery);
           }).toList()
         : allSkills
               .where(
                 (skill) =>
-                    projectService.resolveSkillCategory(skill) ==
+                    projectService.resolveSkillCategory({
+                      'category': skill.category,
+                      'name': skill.name,
+                    }) ==
                     selectedSkillCategory,
               )
               .toList();
 
     final selectedSkills = allSkills
-        .where((skill) => selectedSkillIds.contains(skill['id']))
+        .where((skill) => selectedSkillIds.contains(_skillId(skill)))
         .toList();
 
     return Scaffold(
@@ -349,10 +353,14 @@ class _CreateProjectStep2ScreenState extends State<CreateProjectStep2Screen>
                                 spacing: 8,
                                 runSpacing: 8,
                                 children: selectedSkills.map((skill) {
+                                  final skillId = _skillId(skill);
+                                  if (skillId == null) {
+                                    return const SizedBox.shrink();
+                                  }
                                   return OutlinedButton.icon(
                                     onPressed: () {
                                       setState(() {
-                                        selectedSkillIds.remove(skill['id']);
+                                        selectedSkillIds.remove(skillId);
                                       });
                                     },
                                     style: OutlinedButton.styleFrom(
@@ -365,7 +373,7 @@ class _CreateProjectStep2ScreenState extends State<CreateProjectStep2Screen>
                                     ),
                                     icon: const Icon(Icons.close, size: 14),
                                     label: Text(
-                                      skill['name'].toString(),
+                                      skill.name,
                                       style: mono.labelSmall,
                                     ),
                                   );
@@ -433,22 +441,24 @@ class _CreateProjectStep2ScreenState extends State<CreateProjectStep2Screen>
                                     spacing: 8,
                                     runSpacing: 8,
                                     children: filteredSkills.map((skill) {
-                                      final isSelected = selectedSkillIds
-                                          .contains(skill['id']);
+                                      final skillId = _skillId(skill);
+                                      final isSelected =
+                                          skillId != null && selectedSkillIds.contains(skillId);
                                       return FilterChip(
                                         selected: isSelected,
                                         label: Text(
-                                          skill['name'].toString(),
+                                          skill.name,
                                           style: mono.bodySmall,
                                         ),
                                         onSelected: (selected) {
+                                          if (skillId == null) {
+                                            return;
+                                          }
                                           setState(() {
                                             if (selected) {
-                                              selectedSkillIds.add(skill['id']);
+                                              selectedSkillIds.add(skillId);
                                             } else {
-                                              selectedSkillIds.remove(
-                                                skill['id'],
-                                              );
+                                              selectedSkillIds.remove(skillId);
                                             }
                                           });
                                         },
@@ -714,6 +724,10 @@ class _CreateProjectStep2ScreenState extends State<CreateProjectStep2Screen>
       default:
         return 4;
     }
+  }
+
+  int? _skillId(Skill skill) {
+    return int.tryParse(skill.id);
   }
 }
 

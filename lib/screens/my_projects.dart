@@ -5,9 +5,7 @@ import 'project_detail_screen.dart';
 import 'create_project_screen.dart';
 
 class MyProjectsScreen extends StatefulWidget {
-  const MyProjectsScreen({super.key, this.refreshToken = 0});
-
-  final int refreshToken;
+  const MyProjectsScreen({super.key});
 
   @override
   State<MyProjectsScreen> createState() => _MyProjectsScreenState();
@@ -29,14 +27,6 @@ class _MyProjectsScreenState extends State<MyProjectsScreen>
   }
 
   @override
-  void didUpdateWidget(covariant MyProjectsScreen oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.refreshToken != widget.refreshToken) {
-      loadProjects();
-    }
-  }
-
-  @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
@@ -52,7 +42,7 @@ class _MyProjectsScreenState extends State<MyProjectsScreen>
     try {
       final ownedResponse = await Supabase.instance.client
           .from('projects')
-          .select('*, profiles:owner_id(display_name, email)')
+          .select('*')
           .eq('owner_id', userId)
           .order('created_at', ascending: false);
 

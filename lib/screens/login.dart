@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'home_screen.dart';
 import 'package:devconnect/widgets/brutalist_ui.dart';
+import 'package:devconnect/services/auth_service.dart';
 
 class Login extends StatefulWidget {
   const Login({super.key});
@@ -14,13 +15,14 @@ class _LoginScreenState extends State<Login> {
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
   bool isLoading = false;
+  final _authService = AuthService();
 
   Future<void> signIn() async {
     setState(() {
       isLoading = true;
     });
     try {
-      await Supabase.instance.client.auth.signInWithPassword(
+      await _authService.signIn(
         email: emailController.text.trim(),
         password: passwordController.text,
       );
@@ -32,11 +34,17 @@ class _LoginScreenState extends State<Login> {
           (_) => false,
         );
       }
-    } on AuthException catch (e) {
+    } on AuthException {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Innlogging mislyktes. Sjekk epost og passord.')),
+        );
+      }
+    } on PostgrestException {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Kunne ikke hente profilen din. Prøv igjen.')),
+        );
       }
     } finally {
       if (mounted) {

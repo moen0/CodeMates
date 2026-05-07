@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/application_service.dart';
 import 'package:devconnect/widgets/brutalist_ui.dart';
 import 'public_profile_screen.dart';
+import '../models/application.dart';
+import 'package:devconnect/services/auth_service.dart';
+import 'package:devconnect/services/project_service.dart';
+import '../models/project.dart';
 
 class ApplicationsScreen extends StatefulWidget {
   const ApplicationsScreen({super.key});
@@ -59,8 +62,10 @@ class ReceivedApplicationsTab extends StatefulWidget {
 }
 
 class _ReceivedApplicationsTabState extends State<ReceivedApplicationsTab> {
-  List<Map<String, dynamic>> applications = [];
+  List<Application> applications = [];
   bool isLoading = true;
+  final _authService = AuthService();
+  final _projectService = ProjectService();
 
   @override
   void initState() {
@@ -69,17 +74,22 @@ class _ReceivedApplicationsTabState extends State<ReceivedApplicationsTab> {
   }
 
   Future<void> loadApplications() async {
-    final userId = Supabase.instance.client.auth.currentUser!.id;
+    final userId = _authService.currentUserId;
+    if (userId == null) {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+      return;
+    }
 
     // Hent prosjekter jeg eier
-    final myProjects = await Supabase.instance.client
-        .from('projects')
-        .select('id')
-        .eq('owner_id', userId);
+    final List<Project> myProjects = await _projectService.getOwnedProjects(userId);
 
-    List<Map<String, dynamic>> allApps = [];
+    final List<Application> allApps = [];
     for (var project in myProjects) {
-      final apps = await widget.service.getProjectApplications(project['id']);
+      final apps = await widget.service.getProjectApplications(project.id);
       allApps.addAll(apps);
     }
 
@@ -102,7 +112,7 @@ class _ReceivedApplicationsTabState extends State<ReceivedApplicationsTab> {
       itemCount: applications.length,
       itemBuilder: (context, index) {
         final app = applications[index];
-        final profile = app['profiles'];
+        final profile = app.applicant;
 
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -120,13 +130,13 @@ class _ReceivedApplicationsTabState extends State<ReceivedApplicationsTab> {
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => PublicProfileScreen(userId: app['applicant_id']),
+                      builder: (_) => PublicProfileScreen(userId: app.applicantId),
                     ),
                   ),
                   child: Row(
                     children: [
                       Text(
-                        profile?['display_name'] ?? profile?['email'] ?? 'Ukjent',
+                        profile?.displayLabel ?? 'Ukjent',
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(width: 4),
@@ -135,7 +145,7 @@ class _ReceivedApplicationsTabState extends State<ReceivedApplicationsTab> {
                   ),
                 ),
                 const SizedBox(height: 4),
-                if (app['message'] != null) Text(app['message']),
+                if (app.message != null) Text(app.message!),
                 const SizedBox(height: 12),
                 Row(
                   children: [
@@ -143,9 +153,9 @@ class _ReceivedApplicationsTabState extends State<ReceivedApplicationsTab> {
                       style: brutalistPrimaryButtonStyle(),
                       onPressed: () async {
                         await widget.service.accept(
-                          app['id'],
-                          app['project_id'],
-                          app['applicant_id'],
+                          app.id,
+                          app.projectId,
+                          app.applicantId,
                         );
                         loadApplications();
                       },
@@ -155,7 +165,7 @@ class _ReceivedApplicationsTabState extends State<ReceivedApplicationsTab> {
                     OutlinedButton(
                       style: brutalistOutlineButtonStyle(),
                       onPressed: () async {
-                        await widget.service.reject(app['id']);
+                        await widget.service.reject(app.id);
                         loadApplications();
                       },
                       child: const Text('Avslå'),
@@ -181,7 +191,7 @@ class SentApplicationsTab extends StatefulWidget {
 }
 
 class _SentApplicationsTabState extends State<SentApplicationsTab> {
-  List<Map<String, dynamic>> applications = [];
+  List<Application> applications = [];
   bool isLoading = true;
 
   @override
@@ -211,10 +221,10 @@ class _SentApplicationsTabState extends State<SentApplicationsTab> {
       itemCount: applications.length,
       itemBuilder: (context, index) {
         final app = applications[index];
-        final project = app['projects'];
+        final project = app.project;
 
         Color statusColor;
-        switch (app['status']) {
+        switch (app.status) {
           case 'accepted':
             statusColor = Colors.green;
             break;
@@ -233,15 +243,15 @@ class _SentApplicationsTabState extends State<SentApplicationsTab> {
             side: BorderSide(color: BrutalistPalette.border),
           ),
           child: ListTile(
-            title: Text(project?['title'] ?? 'Ukjent prosjekt'),
-            subtitle: Text(app['message'] ?? ''),
+            title: Text(project?.title ?? 'Ukjent prosjekt'),
+            subtitle: Text(app.message ?? ''),
             trailing: Chip(
               shape: const RoundedRectangleBorder(
                 borderRadius: BorderRadius.zero,
                 side: BorderSide(color: BrutalistPalette.border),
               ),
               label: Text(
-                app['status'],
+                app.status,
                 style: const TextStyle(color: Colors.white, fontSize: 12),
               ),
               backgroundColor: statusColor,

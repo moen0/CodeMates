@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '/services/application_service.dart';
 import '/services/project_service.dart';
 import 'package:devconnect/widgets/brutalist_ui.dart';
 import 'edit_project_screen.dart';
 import 'projects_chat_screen.dart';
 import 'public_profile_screen.dart';
+import '../models/project_member.dart';
+import 'package:devconnect/services/auth_service.dart';
 
 class ProjectDetailScreen extends StatefulWidget {
   final Map<String, dynamic> project;
@@ -19,9 +20,10 @@ class ProjectDetailScreen extends StatefulWidget {
 class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   final _applicationService = ApplicationService();
   final _projectService = ProjectService();
+  final _authService = AuthService();
   bool isLoading = false;
   bool hasApplied = false;
-  List<Map<String, dynamic>> members = [];
+  List<ProjectMember> members = [];
   late Map<String, dynamic> project;
 
   @override
@@ -34,13 +36,15 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
 
   Future<void> checkIfApplied() async {
     try {
-      final userId = Supabase.instance.client.auth.currentUser!.id;
-      final existing = await Supabase.instance.client
-          .from('applications')
-          .select('id')
-          .eq('project_id', project['id'])
-          .eq('applicant_id', userId);
-      if (mounted) setState(() => hasApplied = existing.isNotEmpty);
+      final userId = _authService.currentUserId;
+      if (userId == null) {
+        return;
+      }
+      final existing = await _applicationService.hasUserApplied(
+        projectId: project['id'],
+        userId: userId,
+      );
+      if (mounted) setState(() => hasApplied = existing);
     } catch (_) {}
   }
 
@@ -113,20 +117,16 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       Navigator.pop(context, 'deleted');
     } else if (result == true) {
       try {
-        final refreshed = await Supabase.instance.client
-            .from('projects')
-            .select('*, profiles:owner_id(display_name, email)')
-            .eq('id', project['id'])
-            .single();
-        if (mounted) setState(() => project = refreshed);
+        final refreshed = await _projectService.getProjectByIdWithDetails(project['id']);
+        if (refreshed != null && mounted) setState(() => project = refreshed);
       } catch (_) {}
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final userId = Supabase.instance.client.auth.currentUser!.id;
-    final isOwner = project['owner_id'] == userId;
+    final userId = _authService.currentUserId;
+    final isOwner = userId != null && project['owner_id'] == userId;
     final ownerName =
         project['profiles']?['display_name'] ??
         project['profiles']?['email'] ??
@@ -266,13 +266,13 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                         )
                       else
                         ...members.map((m) {
-                          final profile = m['profiles'];
-                          final name = profile?['display_name'] ?? profile?['email'] ?? 'Ukjent';
-                          final memberId = m['user_id'] as String?;
+                          final profile = m.user;
+                          final name = profile?.displayLabel ?? 'Ukjent';
+                          final memberId = m.userId;
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 8),
                             child: InkWell(
-                              onTap: memberId == null ? null : () => Navigator.push(
+                              onTap: () => Navigator.push(
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => PublicProfileScreen(userId: memberId),
@@ -302,7 +302,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
 
               // Action buttons
               const SizedBox(height: 12),
-              if (isOwner || members.any((m) => m['user_id'] == userId))
+              if (isOwner || (userId != null && members.any((m) => m.userId == userId)))
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: SizedBox(
