@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:devconnect/widgets/brutalist_ui.dart';
+import 'package:devconnect/models/project.dart';
+import 'package:devconnect/services/auth_service.dart';
+import 'package:devconnect/services/project_service.dart';
 import 'project_detail_screen.dart';
 import 'create_project_screen.dart';
 
@@ -14,9 +16,11 @@ class MyProjectsScreen extends StatefulWidget {
 class _MyProjectsScreenState extends State<MyProjectsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final _authService = AuthService();
+  final _projectService = ProjectService();
 
-  List<Map<String, dynamic>> ownedProjects = [];
-  List<Map<String, dynamic>> memberProjects = [];
+  List<Project> ownedProjects = [];
+  List<Project> memberProjects = [];
   bool isLoading = true;
 
   @override
@@ -33,40 +37,24 @@ class _MyProjectsScreenState extends State<MyProjectsScreen>
   }
 
   Future<void> loadProjects() async {
-    final userId = Supabase.instance.client.auth.currentUser?.id;
+    final userId = _authService.currentUserId;
     if (userId == null) {
       if (mounted) setState(() => isLoading = false);
       return;
     }
 
     try {
-      final ownedResponse = await Supabase.instance.client
-          .from('projects')
-          .select('*')
-          .eq('owner_id', userId)
-          .order('created_at', ascending: false);
-
-      final memberResponse = await Supabase.instance.client
-          .from('project_members')
-          .select('projects(*, profiles:owner_id(display_name, email))')
-          .eq('user_id', userId);
-
-      // ignore: avoid_print
-      print('[MyProjects] owned: ${ownedResponse.length}, member rows: ${memberResponse.length}');
+      final owned = await _projectService.getOwnedProjects(userId);
+      final member = await _projectService.getMemberProjects(userId);
 
       if (mounted) {
         setState(() {
-          ownedProjects = List<Map<String, dynamic>>.from(ownedResponse);
-          memberProjects = memberResponse
-              .map((m) => m['projects'] as Map<String, dynamic>?)
-              .whereType<Map<String, dynamic>>()
-              .toList();
+          ownedProjects = owned;
+          memberProjects = member;
           isLoading = false;
         });
       }
-    } catch (e, stack) {
-      // ignore: avoid_print
-      print('[MyProjects] ERROR: $e\n$stack');
+    } catch (e) {
       if (mounted) {
         setState(() => isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -76,8 +64,7 @@ class _MyProjectsScreenState extends State<MyProjectsScreen>
     }
   }
 
-  Widget _buildProjectCard(Map<String, dynamic> project, {bool isOwner = false}) {
-    final owner = project['profiles'];
+  Widget _buildProjectCard(Project project, {bool isOwner = false}) {
     final statusColor = isOwner ? BrutalistPalette.accent : Colors.green;
     final statusLabel = isOwner ? 'Eier' : 'Medlem';
 
@@ -93,7 +80,7 @@ class _MyProjectsScreenState extends State<MyProjectsScreen>
           children: [
             Expanded(
               child: Text(
-                project['title'] ?? '',
+                project.title,
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             ),
@@ -119,14 +106,14 @@ class _MyProjectsScreenState extends State<MyProjectsScreen>
           children: [
             const SizedBox(height: 4),
             Text(
-              project['description'] ?? '',
+              project.description,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 4),
-            if (owner != null)
+            if (project.owner != null)
               Text(
-                'Av ${owner['display_name'] ?? owner['email'] ?? 'Ukjent'}',
+                'Av ${project.owner!.displayLabel}',
                 style: const TextStyle(
                   fontSize: 12,
                   color: BrutalistPalette.muted,
@@ -135,30 +122,44 @@ class _MyProjectsScreenState extends State<MyProjectsScreen>
           ],
         ),
         trailing: const Icon(Icons.chevron_right),
-        onTap: () {
-          Navigator.push(
+        onTap: () async {
+          final result = await Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => ProjectDetailScreen(project: project),
+              builder: (_) => ProjectDetailScreen(project: project.toMap()),
             ),
           );
+          if (!mounted) return;
+          if (result != null) {
+            await loadProjects();
+          }
         },
       ),
     );
   }
 
-  Widget _buildTab(List<Map<String, dynamic>> projects, {required bool isOwner}) {
+  Widget _buildTab(List<Project> projects, {required bool isOwner}) {
     if (projects.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Text(
-            isOwner
-                ? 'Du har ikke opprettet noen prosjekter ennå'
-                : 'Du er ikke med i noen prosjekter ennå',
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: BrutalistPalette.muted),
-          ),
+      return RefreshIndicator(
+        onRefresh: loadProjects,
+        child: ListView(
+          children: [
+            SizedBox(
+              height: MediaQuery.of(context).size.height * 0.6,
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Text(
+                    isOwner
+                        ? 'Du har ikke opprettet noen prosjekter ennå'
+                        : 'Du er ikke med i noen prosjekter ennå',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: BrutalistPalette.muted),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       );
     }
@@ -198,19 +199,22 @@ class _MyProjectsScreenState extends State<MyProjectsScreen>
             context,
             MaterialPageRoute(builder: (_) => const CreateProjectScreen()),
           );
-          if (result == true) loadProjects();
+          if (!mounted) return;
+          if (result != null) {
+            await loadProjects();
+          }
         },
         child: const Icon(Icons.add),
       ),
       child: isLoading
           ? const Center(child: CircularProgressIndicator())
           : TabBarView(
-              controller: _tabController,
-              children: [
-                _buildTab(ownedProjects, isOwner: true),
-                _buildTab(memberProjects, isOwner: false),
-              ],
-            ),
+        controller: _tabController,
+        children: [
+          _buildTab(ownedProjects, isOwner: true),
+          _buildTab(memberProjects, isOwner: false),
+        ],
+      ),
     );
   }
 }

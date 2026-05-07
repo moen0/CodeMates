@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:devconnect/widgets/brutalist_ui.dart';
 import '../services/project_service.dart';
 import 'package:devconnect/models/project.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class EditProjectScreen extends StatefulWidget {
   final Map<String, dynamic> project;
@@ -89,6 +90,15 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
 
     if (confirmed != true || !mounted) return;
 
+    print('Project ID: ${_project.id}');
+    print('Project owner: ${_project.ownerId}');
+    print('Current user: ${Supabase.instance.client.auth.currentUser?.id}');
+    print('Auth token exists: ${Supabase.instance.client.auth.currentSession != null}');
+    final session = Supabase.instance.client.auth.currentSession;
+    print('User ID: ${session?.user.id}');
+    print('User role: ${session?.user.role}');
+    print('Token expired: ${session?.isExpired}');
+    print('Access token (first 30): ${session?.accessToken.substring(0, 30)}');
     setState(() => _isSaving = true);
     try {
       await _service.deleteProject(_project.id);

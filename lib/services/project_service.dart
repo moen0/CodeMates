@@ -60,6 +60,18 @@ class ProjectService {
         .map((row) => ProjectMember.fromMap(Map<String, dynamic>.from(row)))
         .toList();
   }
+  Future<List<Project>> getMemberProjects(String userId) async {
+    final response = await supabase
+        .from('project_members')
+        .select('projects(*, profiles:owner_id(display_name, email))')
+        .eq('user_id', userId);
+
+    return response
+        .map((row) => row['projects'] as Map<String, dynamic>?)
+        .whereType<Map<String, dynamic>>()
+        .map((map) => Project.fromMap(map))
+        .toList();
+  }
 
   Future<void> updateProject({
     required String projectId,
@@ -256,6 +268,23 @@ class ProjectService {
   }
 
   Future<void> deleteProject(String projectId) async {
-    await supabase.from('projects').delete().eq('id', projectId);
+    try {
+      final response = await supabase
+          .from('projects')
+          .delete()
+          .eq('id', projectId)
+          .select();
+      print('Delete response: $response');
+    } on PostgrestException catch (e) {
+      print('Postgrest error code: ${e.code}');
+      print('Postgrest error message: ${e.message}');
+      print('Postgrest error details: ${e.details}');
+      print('Postgrest error hint: ${e.hint}');
+      rethrow;
+    } catch (e) {
+      print('Other error: $e');
+      print('Error type: ${e.runtimeType}');
+      rethrow;
+    }
   }
 }
