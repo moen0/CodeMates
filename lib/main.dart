@@ -2,14 +2,16 @@ import 'package:devconnect/screens/welcome.dart';
 import 'package:devconnect/screens/home_screen.dart';
 import 'package:devconnect/services/auth_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load(fileName: '.env');
   await Supabase.initialize(
-    url: 'https://albicrewixbvnkzuslpb.supabase.co',
-    anonKey: 'sb_publishable_pFKNfr9QFqbXotSjE96YvQ_AkBPjKeP',
+    url: dotenv.env['SUPABASE_URL']!,
+    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
   );
   runApp(const MyApp());
 }
@@ -26,7 +28,6 @@ class AuthGate extends StatelessWidget {
     return StreamBuilder<AuthState>(
       stream: authService.authStateChanges,
       builder: (context, snapshot) {
-        // Venter på første auth-event (inkludert gjenopprettet sesjon)
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             backgroundColor: Color(0xFF000000),
