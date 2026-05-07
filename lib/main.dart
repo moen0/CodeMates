@@ -1,4 +1,5 @@
 import 'package:devconnect/screens/welcome.dart';
+import 'package:devconnect/screens/home_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -10,6 +11,34 @@ void main() async {
     anonKey: 'sb_publishable_pFKNfr9QFqbXotSjE96YvQ_AkBPjKeP',
   );
   runApp(const MyApp());
+}
+
+/// Sjekker om brukeren har en aktiv sesjon ved oppstart og ruter deretter.
+/// Supabase lagrer sesjonen lokalt på enheten, så innloggede brukere
+/// sendes direkte til HomeScreen uten å måtte logge inn på nytt.
+class AuthGate extends StatelessWidget {
+  const AuthGate({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<AuthState>(
+      stream: Supabase.instance.client.auth.onAuthStateChange,
+      builder: (context, snapshot) {
+        // Venter på første auth-event (inkludert gjenopprettet sesjon)
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            backgroundColor: Color(0xFF000000),
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        final session = snapshot.data?.session;
+        if (session != null) {
+          return const HomeScreen();
+        }
+        return const Welcome();
+      },
+    );
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -49,7 +78,7 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const Welcome(),
+      home: const AuthGate(),
     );
   }
 }
