@@ -45,19 +45,15 @@ class _HomeScreenState extends State<HomeScreen> {
       canPop: false,
       child: BrutalistScaffold(
       // Bunnnavigasjonen
-      bottomNavigationBar: NavigationBar(
+      bottomNavigationBar: BottomNavigationBar(
         backgroundColor: BrutalistPalette.panel,
-        indicatorColor: BrutalistPalette.accent.withValues(alpha: 0.25),
-        labelTextStyle: WidgetStateProperty.resolveWith((states) {
-          final selected = states.contains(WidgetState.selected);
-          return TextStyle(
-            color: selected ? Colors.white : BrutalistPalette.muted,
-            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-          );
-        }),
-        selectedIndex: currentIndex,
-        onDestinationSelected: (index) {
-          // setState trigger rebuild med ny fane
+        selectedItemColor: Colors.white,
+        unselectedItemColor: BrutalistPalette.muted,
+        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 10),
+        unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 10),
+        type: BottomNavigationBarType.fixed,
+        currentIndex: currentIndex,
+        onTap: (index) {
           setState(() {
             currentIndex = index;
             if (index == 3) {
@@ -65,14 +61,11 @@ class _HomeScreenState extends State<HomeScreen> {
             }
           });
         },
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.explore), label: 'Utforsk'),
-          NavigationDestination(
-            icon: Icon(Icons.folder),
-            label: 'Mine prosjekter',
-          ),
-          NavigationDestination(icon: Icon(Icons.mail), label: 'Søknader'),
-          NavigationDestination(icon: Icon(Icons.person), label: 'Profil'),
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.explore, size: 24), label: 'Utforsk'),
+          BottomNavigationBarItem(icon: Icon(Icons.terminal, size: 24), label: 'Mine prosjekter'),
+          BottomNavigationBarItem(icon: Icon(Icons.mail, size: 24), label: 'Søknader'),
+          BottomNavigationBarItem(icon: Icon(Icons.person, size: 24), label: 'Profil'),
         ],
       ),
       child: IndexedStack(index: currentIndex, children: screens),

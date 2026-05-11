@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:devconnect/screens/login.dart';
 import 'package:devconnect/screens/register.dart';
+import 'package:devconnect/screens/feed_screen.dart';
 import 'package:devconnect/widgets/brutalist_ui.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -69,7 +70,23 @@ class Welcome extends StatelessWidget {
                   child: const Text('Logg inn'),
                 ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 12),
+
+              TextButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const FeedScreen(isGuest: true),
+                    ),
+                  );
+                },
+                child: const Text(
+                  'Fortsett som gjest',
+                  style: TextStyle(color: BrutalistPalette.muted),
+                ),
+              ),
+              const SizedBox(height: 20),
             ],
           ),
         ),
