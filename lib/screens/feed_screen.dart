@@ -596,7 +596,7 @@ class _FeedScreenState extends State<FeedScreen> {
                 ),
               ),
               const SizedBox(width: 12),
-              _buildSortChip('match', 'MATCH', enabled: true),
+              _buildSortChip('match', 'MATCH', enabled: hasUser),
               const SizedBox(width: 8),
               _buildSortChip('newest', 'NYEST', enabled: true),
             ],
