@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:devconnect/services/project_service.dart';
 import 'package:devconnect/models/skill.dart';
+import 'package:devconnect/widgets/brutalist_ui.dart';
 
 class CreateProjectStep2Screen extends StatefulWidget {
   const CreateProjectStep2Screen({
@@ -24,7 +25,6 @@ class CreateProjectStep2Screen extends StatefulWidget {
 
 class _CreateProjectStep2ScreenState extends State<CreateProjectStep2Screen>
     with SingleTickerProviderStateMixin {
-  static const Color _bg = Color(0xFF000000);
   static const Color _panel = Color(0xFF111111);
   static const Color _border = Color(0xFF333333);
   static const Color _muted = Color(0xFF888888);
@@ -232,419 +232,407 @@ class _CreateProjectStep2ScreenState extends State<CreateProjectStep2Screen>
         .where((skill) => selectedSkillIds.contains(_skillId(skill)))
         .toList();
 
-    return Scaffold(
-      backgroundColor: _bg,
-      body: Stack(
-        children: [
-          Positioned.fill(child: CustomPaint(painter: _GridPainter())),
-          Positioned.fill(
-            child: IgnorePointer(
-              child: CustomPaint(painter: _ScanlinePainter()),
-            ),
-          ),
-          SafeArea(
-            child: Column(
-              children: [
-                _staggered(
-                  index: 0,
-                  child: Container(
-                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-                    decoration: const BoxDecoration(
-                      border: Border(bottom: BorderSide(color: _border)),
-                    ),
-                    child: Column(
+    return BrutalistScaffold(
+      child: SafeArea(
+        child: Column(
+          children: [
+            _staggered(
+              index: 0,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+                decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: _border)),
+                ),
+                child: Column(
+                  children: [
+                    Row(
                       children: [
-                        Row(
-                          children: [
-                            IconButton(
-                              onPressed: () => Navigator.pop(context),
-                              icon: const Icon(Icons.arrow_back),
-                              color: Colors.white,
-                              style: IconButton.styleFrom(
-                                backgroundColor: _panel,
-                                shape: const RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.zero,
-                                  side: BorderSide(color: _border),
-                                ),
-                              ),
+                        IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.arrow_back),
+                          color: Colors.white,
+                          style: IconButton.styleFrom(
+                            backgroundColor: _panel,
+                            shape: const RoundedRectangleBorder(
+                              borderRadius: BorderRadius.zero,
+                              side: BorderSide(color: _border),
                             ),
-                            const Expanded(
-                              child: Text(
-                                'Nytt prosjekt',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 1.2,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 48),
-                          ],
-                        ),
-                        const SizedBox(height: 14),
-                        Text(
-                          'STEG 2 AV 2',
-                          style: mono.bodySmall?.copyWith(
-                            color: _muted,
-                            letterSpacing: 1.8,
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: const [
-                            Expanded(
-                              child: Divider(
-                                color: _accent,
-                                thickness: 2,
-                                height: 2,
-                              ),
+                        const Expanded(
+                          child: Text(
+                            'Nytt prosjekt',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.2,
                             ),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: Divider(
-                                color: _accent,
-                                thickness: 2,
-                                height: 2,
-                              ),
-                            ),
-                          ],
+                          ),
+                        ),
+                        const SizedBox(width: 48),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      'STEG 2 AV 2',
+                      style: mono.bodySmall?.copyWith(
+                        color: _muted,
+                        letterSpacing: 1.8,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: const [
+                        Expanded(
+                          child: Divider(
+                            color: _accent,
+                            thickness: 2,
+                            height: 2,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Divider(
+                            color: _accent,
+                            thickness: 2,
+                            height: 2,
+                          ),
                         ),
                       ],
                     ),
-                  ),
+                  ],
                 ),
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: DefaultTextStyle(
-                      style:
-                          mono.bodyMedium?.copyWith(color: Colors.white) ??
-                          const TextStyle(color: Colors.white),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _staggered(
-                            index: 1,
-                            child: _sectionLabel('Ønskede ferdigheter'),
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: DefaultTextStyle(
+                  style: mono.bodyMedium?.copyWith(color: Colors.white) ??
+                      const TextStyle(color: Colors.white),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _staggered(
+                        index: 1,
+                        child: _sectionLabel('Ønskede ferdigheter'),
+                      ),
+                      const SizedBox(height: 8),
+                      _staggered(
+                        index: 2,
+                        child: TextField(
+                          onChanged: (value) {
+                            setState(() {
+                              searchQuery = value;
+                            });
+                          },
+                          style: mono.bodyMedium?.copyWith(
+                            color: Colors.white,
                           ),
-                          const SizedBox(height: 8),
-                          _staggered(
-                            index: 2,
-                            child: TextField(
-                              onChanged: (value) {
-                                setState(() {
-                                  searchQuery = value;
-                                });
-                              },
-                              style: mono.bodyMedium?.copyWith(
-                                color: Colors.white,
-                              ),
-                              decoration: _inputDecoration(
-                                hintText: 'Søk etter ferdigheter...',
-                              ).copyWith(prefixIcon: const Icon(Icons.search)),
-                            ),
+                          decoration: _inputDecoration(
+                            hintText: 'Søk etter ferdigheter...',
+                          ).copyWith(prefixIcon: const Icon(Icons.search)),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      if (selectedSkills.isNotEmpty)
+                        _staggered(
+                          index: 3,
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: selectedSkills.map((skill) {
+                              final skillId = _skillId(skill);
+                              if (skillId == null) {
+                                return const SizedBox.shrink();
+                              }
+                              return OutlinedButton.icon(
+                                onPressed: () {
+                                  setState(() {
+                                    selectedSkillIds.remove(skillId);
+                                  });
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.white,
+                                  backgroundColor: _accent,
+                                  side: const BorderSide(color: _accent),
+                                  shape: const RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.zero,
+                                  ),
+                                ),
+                                icon: const Icon(Icons.close, size: 14),
+                                label: Text(
+                                  skill.name,
+                                  style: mono.labelSmall,
+                                ),
+                              );
+                            }).toList(),
                           ),
-                          const SizedBox(height: 12),
-                          if (selectedSkills.isNotEmpty)
-                            _staggered(
-                              index: 3,
-                              child: Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: selectedSkills.map((skill) {
-                                  final skillId = _skillId(skill);
-                                  if (skillId == null) {
-                                    return const SizedBox.shrink();
-                                  }
-                                  return OutlinedButton.icon(
+                        ),
+                      if (selectedSkills.isNotEmpty)
+                        const SizedBox(height: 12),
+                      if (normalizedQuery.isEmpty)
+                        _staggered(
+                          index: 4,
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: skillCategories.map((category) {
+                                final active =
+                                    selectedSkillCategory == category.id;
+                                return Padding(
+                                  padding: const EdgeInsets.only(
+                                    right: 8,
+                                    bottom: 12,
+                                  ),
+                                  child: OutlinedButton(
                                     onPressed: () {
                                       setState(() {
-                                        selectedSkillIds.remove(skillId);
+                                        selectedSkillCategory = category.id;
                                       });
                                     },
                                     style: OutlinedButton.styleFrom(
-                                      foregroundColor: Colors.white,
-                                      backgroundColor: _accent,
-                                      side: const BorderSide(color: _accent),
+                                      foregroundColor: active
+                                          ? Colors.white
+                                          : _muted,
+                                      backgroundColor: active
+                                          ? _accent
+                                          : Colors.transparent,
                                       shape: const RoundedRectangleBorder(
                                         borderRadius: BorderRadius.zero,
                                       ),
+                                      side: BorderSide(
+                                        color: active ? _accent : _border,
+                                      ),
                                     ),
-                                    icon: const Icon(Icons.close, size: 14),
+                                    child: Text(
+                                      category.label,
+                                      style: mono.labelSmall,
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                        ),
+                      _staggered(
+                        index: 5,
+                        child: filteredSkills.isEmpty
+                            ? Text(
+                                normalizedQuery.isNotEmpty
+                                    ? 'Ingen treff for soket ditt'
+                                    : 'Ingen ferdigheter i ${_categoryLabel(selectedSkillCategory)} enda',
+                                style: mono.bodySmall?.copyWith(
+                                  color: _muted,
+                                ),
+                              )
+                            : Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: filteredSkills.map((skill) {
+                                  final skillId = _skillId(skill);
+                                  final isSelected =
+                                      skillId != null && selectedSkillIds.contains(skillId);
+                                  return FilterChip(
+                                    selected: isSelected,
                                     label: Text(
                                       skill.name,
-                                      style: mono.labelSmall,
+                                      style: mono.bodySmall,
+                                    ),
+                                    onSelected: (selected) {
+                                      if (skillId == null) {
+                                        return;
+                                      }
+                                      setState(() {
+                                        if (selected) {
+                                          selectedSkillIds.add(skillId);
+                                        } else {
+                                          selectedSkillIds.remove(skillId);
+                                        }
+                                      });
+                                    },
+                                    showCheckmark: false,
+                                    color: WidgetStateProperty.resolveWith((
+                                      states,
+                                    ) {
+                                      if (states.contains(
+                                        WidgetState.selected,
+                                      )) {
+                                        return _accent.withValues(
+                                          alpha: 0.18,
+                                        );
+                                      }
+                                      return _panel;
+                                    }),
+                                    side: BorderSide(
+                                      color: isSelected ? _accent : _border,
+                                    ),
+                                    shape: const RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.zero,
+                                    ),
+                                    labelStyle: TextStyle(
+                                      color: isSelected
+                                          ? Colors.white
+                                          : _muted,
                                     ),
                                   );
                                 }).toList(),
                               ),
-                            ),
-                          if (selectedSkills.isNotEmpty)
-                            const SizedBox(height: 12),
-                          if (normalizedQuery.isEmpty)
-                            _staggered(
-                              index: 4,
-                              child: SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                child: Row(
-                                  children: skillCategories.map((category) {
-                                    final active =
-                                        selectedSkillCategory == category.id;
-                                    return Padding(
-                                      padding: const EdgeInsets.only(
-                                        right: 8,
-                                        bottom: 12,
-                                      ),
-                                      child: OutlinedButton(
-                                        onPressed: () {
-                                          setState(() {
-                                            selectedSkillCategory = category.id;
-                                          });
-                                        },
-                                        style: OutlinedButton.styleFrom(
-                                          foregroundColor: active
-                                              ? Colors.white
-                                              : _muted,
-                                          backgroundColor: active
-                                              ? _accent
-                                              : Colors.transparent,
-                                          shape: const RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.zero,
-                                          ),
-                                          side: BorderSide(
-                                            color: active ? _accent : _border,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          category.label,
-                                          style: mono.labelSmall,
-                                        ),
-                                      ),
-                                    );
-                                  }).toList(),
+                      ),
+                      const SizedBox(height: 24),
+                      _staggered(
+                        index: 6,
+                        child: _sectionLabel('Teamstorrelse'),
+                      ),
+                      const SizedBox(height: 10),
+                      _staggered(
+                        index: 7,
+                        child: Row(
+                          children: teamSizes.map((size) {
+                            final active = selectedTeamSize == size;
+                            return Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: OutlinedButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      selectedTeamSize = size;
+                                    });
+                                  },
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: active
+                                        ? Colors.white
+                                        : _muted,
+                                    backgroundColor: active
+                                        ? _accent
+                                        : Colors.transparent,
+                                    side: BorderSide(
+                                      color: active ? _accent : _border,
+                                    ),
+                                    shape: const RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.zero,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    size,
+                                    style: mono.labelMedium,
+                                  ),
                                 ),
                               ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      _staggered(
+                        index: 8,
+                        child: _sectionLabel('Tidsramme'),
+                      ),
+                      const SizedBox(height: 10),
+                      _staggered(
+                        index: 9,
+                        child: Row(
+                          children: timeframeOptions.map((timeframe) {
+                            final active =
+                                selectedTimeframe == timeframe.id;
+                            return Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: OutlinedButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      selectedTimeframe = timeframe.id;
+                                      if (timeframe.id != 'custom') {
+                                        customMonthsController.clear();
+                                      }
+                                    });
+                                  },
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: active
+                                        ? Colors.white
+                                        : _muted,
+                                    backgroundColor: active
+                                        ? _accent
+                                        : Colors.transparent,
+                                    side: BorderSide(
+                                      color: active ? _accent : _border,
+                                    ),
+                                    shape: const RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.zero,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    timeframe.label,
+                                    textAlign: TextAlign.center,
+                                    style: mono.labelSmall,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                      if (selectedTimeframe == 'custom') ...[
+                        const SizedBox(height: 10),
+                        _staggered(
+                          index: 10,
+                          child: TextField(
+                            controller: customMonthsController,
+                            keyboardType: TextInputType.number,
+                            style: mono.bodyMedium?.copyWith(
+                              color: Colors.white,
                             ),
-                          _staggered(
-                            index: 5,
-                            child: filteredSkills.isEmpty
-                                ? Text(
-                                    normalizedQuery.isNotEmpty
-                                        ? 'Ingen treff for soket ditt'
-                                        : 'Ingen ferdigheter i ${_categoryLabel(selectedSkillCategory)} enda',
-                                    style: mono.bodySmall?.copyWith(
-                                      color: _muted,
+                            decoration: _inputDecoration(
+                              hintText: 'Antall måneder',
+                            ),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 22),
+                      _staggered(
+                        index: 11,
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: isLoading ? null : _onCreatePressed,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _accent,
+                              foregroundColor: Colors.white,
+                              disabledBackgroundColor: Colors.transparent,
+                              disabledForegroundColor: const Color(
+                                0xFF555555,
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 16,
+                              ),
+                              shape: const RoundedRectangleBorder(
+                                borderRadius: BorderRadius.zero,
+                                side: BorderSide(color: _border),
+                              ),
+                              textStyle: mono.labelLarge?.copyWith(
+                                letterSpacing: 2,
+                              ),
+                            ),
+                            child: isLoading
+                                ? const SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
                                     ),
                                   )
-                                : Wrap(
-                                    spacing: 8,
-                                    runSpacing: 8,
-                                    children: filteredSkills.map((skill) {
-                                      final skillId = _skillId(skill);
-                                      final isSelected =
-                                          skillId != null && selectedSkillIds.contains(skillId);
-                                      return FilterChip(
-                                        selected: isSelected,
-                                        label: Text(
-                                          skill.name,
-                                          style: mono.bodySmall,
-                                        ),
-                                        onSelected: (selected) {
-                                          if (skillId == null) {
-                                            return;
-                                          }
-                                          setState(() {
-                                            if (selected) {
-                                              selectedSkillIds.add(skillId);
-                                            } else {
-                                              selectedSkillIds.remove(skillId);
-                                            }
-                                          });
-                                        },
-                                        showCheckmark: false,
-                                        color: WidgetStateProperty.resolveWith((
-                                          states,
-                                        ) {
-                                          if (states.contains(
-                                            WidgetState.selected,
-                                          )) {
-                                            return _accent.withValues(
-                                              alpha: 0.18,
-                                            );
-                                          }
-                                          return _panel;
-                                        }),
-                                        side: BorderSide(
-                                          color: isSelected ? _accent : _border,
-                                        ),
-                                        shape: const RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.zero,
-                                        ),
-                                        labelStyle: TextStyle(
-                                          color: isSelected
-                                              ? Colors.white
-                                              : _muted,
-                                        ),
-                                      );
-                                    }).toList(),
-                                  ),
+                                : const Text('OPPRETT PROSJEKT'),
                           ),
-                          const SizedBox(height: 24),
-                          _staggered(
-                            index: 6,
-                            child: _sectionLabel('Teamstorrelse'),
-                          ),
-                          const SizedBox(height: 10),
-                          _staggered(
-                            index: 7,
-                            child: Row(
-                              children: teamSizes.map((size) {
-                                final active = selectedTeamSize == size;
-                                return Expanded(
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(right: 8),
-                                    child: OutlinedButton(
-                                      onPressed: () {
-                                        setState(() {
-                                          selectedTeamSize = size;
-                                        });
-                                      },
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: active
-                                            ? Colors.white
-                                            : _muted,
-                                        backgroundColor: active
-                                            ? _accent
-                                            : Colors.transparent,
-                                        side: BorderSide(
-                                          color: active ? _accent : _border,
-                                        ),
-                                        shape: const RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.zero,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        size,
-                                        style: mono.labelMedium,
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              }).toList(),
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          _staggered(
-                            index: 8,
-                            child: _sectionLabel('Tidsramme'),
-                          ),
-                          const SizedBox(height: 10),
-                          _staggered(
-                            index: 9,
-                            child: Row(
-                              children: timeframeOptions.map((timeframe) {
-                                final active =
-                                    selectedTimeframe == timeframe.id;
-                                return Expanded(
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(right: 8),
-                                    child: OutlinedButton(
-                                      onPressed: () {
-                                        setState(() {
-                                          selectedTimeframe = timeframe.id;
-                                          if (timeframe.id != 'custom') {
-                                            customMonthsController.clear();
-                                          }
-                                        });
-                                      },
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: active
-                                            ? Colors.white
-                                            : _muted,
-                                        backgroundColor: active
-                                            ? _accent
-                                            : Colors.transparent,
-                                        side: BorderSide(
-                                          color: active ? _accent : _border,
-                                        ),
-                                        shape: const RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.zero,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        timeframe.label,
-                                        textAlign: TextAlign.center,
-                                        style: mono.labelSmall,
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              }).toList(),
-                            ),
-                          ),
-                          if (selectedTimeframe == 'custom') ...[
-                            const SizedBox(height: 10),
-                            _staggered(
-                              index: 10,
-                              child: TextField(
-                                controller: customMonthsController,
-                                keyboardType: TextInputType.number,
-                                style: mono.bodyMedium?.copyWith(
-                                  color: Colors.white,
-                                ),
-                                decoration: _inputDecoration(
-                                  hintText: 'Antall måneder',
-                                ),
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 22),
-                          _staggered(
-                            index: 11,
-                            child: SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                onPressed: isLoading ? null : _onCreatePressed,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: _accent,
-                                  foregroundColor: Colors.white,
-                                  disabledBackgroundColor: Colors.transparent,
-                                  disabledForegroundColor: const Color(
-                                    0xFF555555,
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 16,
-                                  ),
-                                  shape: const RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.zero,
-                                    side: BorderSide(color: _border),
-                                  ),
-                                  textStyle: mono.labelLarge?.copyWith(
-                                    letterSpacing: 2,
-                                  ),
-                                ),
-                                child: isLoading
-                                    ? const SizedBox(
-                                        height: 20,
-                                        width: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : const Text('OPPRETT PROSJEKT'),
-                              ),
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
-                    ),
+                    ],
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -745,38 +733,3 @@ class _TimeframeOption {
   final String label;
 }
 
-class _GridPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    const spacing = 24.0;
-    final paint = Paint()
-      ..color = const Color(0xFF6366F1).withValues(alpha: 0.08)
-      ..strokeWidth = 1;
-
-    for (double x = 0; x <= size.width; x += spacing) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
-    }
-    for (double y = 0; y <= size.height; y += spacing) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _ScanlinePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.black.withValues(alpha: 0.11)
-      ..strokeWidth = 1;
-
-    for (double y = 0; y < size.height; y += 4) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}

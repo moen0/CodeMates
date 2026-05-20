@@ -4,6 +4,7 @@ import 'package:devconnect/services/auth_service.dart';
 import 'package:devconnect/services/project_service.dart';
 import 'package:devconnect/models/project.dart';
 import 'package:devconnect/models/skill.dart';
+import 'package:devconnect/widgets/project_card.dart';
 import 'project_detail_screen.dart';
 import 'create_project_screen.dart';
 import 'public_profile_screen.dart';
@@ -226,122 +227,32 @@ class _FeedScreenState extends State<FeedScreen> {
                       hasUser ? _matchScores[project.id] : null;
                   final skills = _projectSkills[project.id] ?? const <Skill>[];
 
-                  return Card(
-                    margin: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    color: BrutalistPalette.panel,
-                    shape: const RoundedRectangleBorder(
-                      borderRadius: BorderRadius.zero,
-                      side: BorderSide(color: BrutalistPalette.border),
-                    ),
-                    child: ListTile(
-                      title: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              project.title,
-                              style: const TextStyle(fontWeight: FontWeight.bold),
-                            ),
+                  return ProjectCard(
+                    project: project,
+                    matchScore: matchScore,
+                    skills: skills,
+                    owner: owner,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ProjectDetailScreen(
+                            project: _projectToMap(project),
+                            isGuest: widget.isGuest,
                           ),
-                          if (matchScore != null)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: BrutalistPalette.accent),
-                                color: BrutalistPalette.accent.withValues(alpha: 0.12),
-                              ),
-                              child: Text(
-                                '$matchScore% treff',
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  color: BrutalistPalette.accent,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 4),
-                          Text(
-                            project.description,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          if (skills.isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: skills.take(4).map((skill) {
-                                final name = skill.name.toUpperCase();
-                                return Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 6,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    border: Border.all(
-                                      color: BrutalistPalette.border,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    name,
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      color: BrutalistPalette.muted,
-                                      letterSpacing: 0.8,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                );
-                              }).toList(),
-                            ),
-                          ],
-                          const SizedBox(height: 4),
-                          GestureDetector(
-                            onTap: () {
-                              final ownerId = project.ownerId;
-                              if (ownerId.isEmpty) return;
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => PublicProfileScreen(userId: ownerId),
-                                ),
-                              );
-                            },
-                            child: Text(
-                              'Av ${owner?.displayLabel ?? 'Ukjent'}',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: BrutalistPalette.accent,
-                                decoration: TextDecoration.underline,
-                                decorationColor: BrutalistPalette.accent,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => ProjectDetailScreen(
-                              project: _projectToMap(project),
-                              isGuest: widget.isGuest,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
+                        ),
+                      );
+                    },
+                    onOwnerTap: () {
+                      final ownerId = project.ownerId;
+                      if (ownerId.isEmpty) return;
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => PublicProfileScreen(userId: ownerId),
+                        ),
+                      );
+                    },
                   );
                 },
               ),
