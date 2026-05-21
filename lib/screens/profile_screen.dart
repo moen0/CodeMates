@@ -268,18 +268,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
 
     await _profileService.updateProfile(updated);
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _profile = updated;
-    });
-
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Profil oppdatert')));
   }
 
   Future<void> _showEditProfileDialog() async {
@@ -288,6 +276,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       currentProfile: _profile,
       onSave: _saveProfileEdits,
     );
+    if (mounted) {
+      await _loadProfile();
+    }
   }
 
   /// Logger ut brukeren og sender dem tilbake til velkomstskjermen.
