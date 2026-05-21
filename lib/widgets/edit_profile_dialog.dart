@@ -41,10 +41,9 @@ Future<void> showEditProfileDialog({
     text: currentProfile?.websiteUrl ?? '',
   );
 
-  try {
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) {
         var isSaving = false;
         var selectedYear = currentProfile?.year;
         if (selectedYear != null && (selectedYear < 1 || selectedYear > 5)) {
@@ -193,15 +192,6 @@ Future<void> showEditProfileDialog({
           },
         );
       },
-    );
-  } finally {
-    nameController.dispose();
-    bioController.dispose();
-    universityController.dispose();
-    githubController.dispose();
-    studyProgramController.dispose();
-    linkedinController.dispose();
-    websiteController.dispose();
-  }
+  );
 }
 
