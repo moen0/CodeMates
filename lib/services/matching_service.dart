@@ -14,7 +14,7 @@ class MatchingService {
   Future<int> calculateMatch(String userId, String projectId) async {
     final userSkillWeights = await _getUserSkillWeights(userId);
     final projectSkillIds = await _getProjectSkillIds(projectId);
-    return _calculateScore(userSkillWeights, projectSkillIds);
+    return calculateScore(userSkillWeights, projectSkillIds);
   }
 
   // Beregn match mot flere prosjekter i ett kall
@@ -53,7 +53,7 @@ class MatchingService {
     final scores = <String, int>{};
     for (final projectId in projectIds) {
       final skillIds = projectSkillMap[projectId] ?? <int>[];
-      scores[projectId] = _calculateScore(userSkillWeights, skillIds);
+      scores[projectId] = calculateScore(userSkillWeights, skillIds);
     }
 
     return MatchResult(scores: scores, userHasSkills: userHasSkills);
@@ -104,7 +104,7 @@ class MatchingService {
     return skillIds;
   }
 
-  int _calculateScore(Map<int, double> userSkillWeights, List<int> projectSkillIds) {
+  static int calculateScore(Map<int, double> userSkillWeights, List<int> projectSkillIds) {
     if (projectSkillIds.isEmpty) {
       return 100;
     }
